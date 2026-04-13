@@ -1,5 +1,5 @@
-{{~ #Q.何故こんな物を作った？ A.基本設定のままだと特定種族が常時持つ固有健康バフ（制御不能な触手）や不要な情報（心情：とても豪華な娯楽室、健康：傷跡）までLLMに渡してしまうため。「豪華な娯楽室で遊べて最高の気分だ！」連呼を防止できる。 ~}}
-{{~ #使用の際はPawn ProfilesとDialogue Promptを削除かオフにする。また、コンテキストフィルターは全てONにする（OFFだとRimtalk独自プロパティが取得出来ない） ~}}
+{{~ # Q.何故こんな物を作った？ A.基本設定のままだと特定種族が常時持つ固有健康バフ（制御不能な触手）や不要な情報（心情：とても豪華な娯楽室、健康：傷跡）までLLMに渡してしまうため。「豪華な娯楽室で遊べて最高の気分だ！」連呼を防止できる。 ~}}
+{{~ # 使用の際はPawn ProfilesとDialogue Promptを削除かオフにする。また、コンテキストフィルターは全てONにする（OFFだとRimtalk独自プロパティが取得出来ない） ~}}
 {{~ # ▼辞書セット、自環境に合わせてここを編集▼ ~}}
 {{~ # ▼表示したい天気、天候がkeyの場合valueを出力、開発者モードのChange weatherで大体の天気を確認可能 ~}}
 {{~ Weather_map = {
@@ -17,6 +17,9 @@
 } ~}}
 {{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力 ~}}
 {{~ Thought_conditions = {
+    "腹が空いた": "お腹が空いています",
+    "栄養失調": "十分な栄養が摂れておらず活動に支障が出ています",
+    "飢餓": "餓死寸前",
     "激しい痛み": "激しい痛みを感じています",
     "気が遠くなる痛み": "気が遠くなるほどの痛みを感じています",
     "お弁当を食べた": "美味しいお弁当を食べて喜んでいます"
@@ -37,6 +40,10 @@
 {{~ if map.IsPlayerHome != true ~}}
 自分達のコロニー外で遠征活動中です
 {{~ end ~}}
+{{~ # ★周囲に敵対派閥がいるかどうか ~}}
+{{~ if map.dangerWatcher.DangerRating | string.contains "High" ~}}
+周囲に敵対勢力が存在し、緊張感が高まっています
+{{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{ maptemp =  map.mapTemperature.OutdoorTemp | math.floor}}
 {{~ if maptemp >= 40 || maptemp <= -15~}}
@@ -48,10 +55,14 @@
 {{ weather.value }}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★ポーンを取得開始 ~}}
+{{~ # ★ポーン取得ループ開始 ~}}
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
 {{ p.name }}:{{~ if p.gender | string.contains "Male" ~}}男性{{~ else ~}}女性{{ end }} {{ p.age }}歳
+{{~ # ★所持武器名称取得 ~}}
+{{~ if p.equipment | string.contains "Weapon:" ~}}
+{{~ weapon = p.equipment | string.split "Weapon: " | array.last | string.split ", Apparel:" | array.first | string.strip ~}}
+{{~ end ~}}
 {{~ # ★自分で設定したペルソナ ~}}
 {{ p.personality }}
 {{~ # ★役割 ~}}
@@ -106,15 +117,32 @@
 立つことが出来ません
 {{~ end ~}}
 {{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
+{{~ if p.location | string.contains "外気温" && map.weather | string.contains "軌道上"}}
+宇宙空間で活動中です
+{{~else if p.location | string.contains "外気温"~}}
+屋外で活動中です
+{{~ else ~}}
 {{~ if maptemp >= 40 || maptemp <= -15 ~}}
-{{~ if !(p.location | string.contains "外気温") && (p.location | string.contains "-75C") ~}}
+{{~ if !(p.location | string.contains "外気温") && (maptemp == -75) ~}}
 {{ p.location }}にいます、真空状態です
 {{~ else if !(p.location | string.contains "外気温") ~}}
 {{ p.location }}にいます
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ★ポーンは今何をしているか ~}}
+{{~ if p.job | string.contains "精神状態" ~}}
+{{ p }}は精神が弱っています
+{{ p.job }}
+{{~else if p.job | string.contains "Attacking" ~}}
+{{ weapon }}で敵を攻撃中です
+{{~ else if p.job | string.contains "攻撃中"~}}
+{{ weapon }}で{{ p.job }}
+{{~ else if p.job | string.contains "狩っている"~}}
+{{ weapon }}で{{ p.job }}
 {{~ else ~}}
-屋外で活動中です
+{{ p.job }}
 {{~ end ~}}
-{{~ end ~}}
-{{~ #ポーンループ終了 ~}}
+{{~ #ポーン取得ループ終了 ~}}
 {{~ end ~}}
 {{~ end ~}}
