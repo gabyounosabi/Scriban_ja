@@ -1,0 +1,120 @@
+{{~ #Q.何故こんな物を作った？ A.基本設定のままだと特定種族が常時持つ固有健康バフ（制御不能な触手）や不要な情報（心情：とても豪華な娯楽室、健康：傷跡）までLLMに渡してしまうため。「豪華な娯楽室で遊べて最高の気分だ！」連呼を防止できる。 ~}}
+{{~ #使用の際はPawn ProfilesとDialogue Promptを削除かオフにする。また、コンテキストフィルターは全てONにする（OFFだとRimtalk独自プロパティが取得出来ない） ~}}
+{{~ # ▼辞書セット、自環境に合わせてここを編集▼ ~}}
+{{~ # ▼表示したい天気、天候がkeyの場合valueを出力、開発者モードのChange weatherで大体の天気を確認可能 ~}}
+{{~ Weather_map = {
+    "軌道上": "軌道上にいます",
+    "地底": "地底にいます",
+    "地下洞窟": "地下洞窟にいます",
+    "施設内": "施設内にいます",
+    "不自然な闇": "屋外は異形が生み出した不自然な闇で何も見えません、人々は不安を抱えます",
+    "砂嵐": "屋外では砂嵐が吹き荒れています",
+    "血の雨": "屋外では生物が凶暴化してしまう血の雨が降っています",
+    "吹雪": "屋外では吹雪が吹き荒れています",
+    "毒雨": "屋外では有毒な雨が降っています",
+    "盲目の霧": "屋外は濃い霧に包まれています",
+    "死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません"
+} ~}}
+{{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力 ~}}
+{{~ Thought_conditions = {
+    "激しい痛み": "激しい痛みを感じています",
+    "気が遠くなる痛み": "気が遠くなるほどの痛みを感じています",
+    "お弁当を食べた": "美味しいお弁当を食べて喜んでいます"
+} ~}}
+{{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
+{{~ Health_conditions = {
+    "傷からの感染症": "傷から発症した感染症で苦しんでいます",
+    "刺し傷": "刺し傷により苦しんでいます",
+    "切創": "切創により苦しんでいます",
+    "凍傷":"凍傷で苦しんでいます"
+} ~}}
+{{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みに関係なく常に表示） ~}}
+{{~ Status_conditions = {
+    "低体温症": "外気や場所によって体温が下がり寒がっています",
+    "ゴージュースによる興奮": "ゴージュースという戦闘用に開発された薬物を飲み興奮状態です"
+} ~}}
+{{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
+{{~ if map.IsPlayerHome != true ~}}
+自分達のコロニー外で遠征活動中です
+{{~ end ~}}
+{{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
+{{ maptemp =  map.mapTemperature.OutdoorTemp | math.floor}}
+{{~ if maptemp >= 40 || maptemp <= -15~}}
+外気温は{{maptemp}}Cです
+{{~ end ~}}
+{{~ # ★辞書を使い天気、空間を描写 ~}}
+{{~ for weather in weather_map ~}}
+{{~ if map.weather | string.contains weather.key ~}}
+{{ weather.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ★ポーンを取得開始 ~}}
+{{~ for p in pawns ~}}
+{{~ if p.RaceProps.Humanlike ~}}
+{{ p.name }}:{{~ if p.gender | string.contains "Male" ~}}男性{{~ else ~}}女性{{ end }} {{ p.age }}歳
+{{~ # ★自分で設定したペルソナ ~}}
+{{ p.personality }}
+{{~ # ★役割 ~}}
+{{~ role_map = {
+    "Prisoner": "このキャラクターは捕虜として生活しています",
+    "Slave": "このキャラクターは奴隷として働かされています"
+} ~}}
+{{~ for role in role_map ~}}
+{{~ if p.role | string.contains role.key ~}}
+{{ role.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ★赤ちゃんチェック ~}}
+{{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
+この子は幼く「あう～」のような赤ちゃん言葉でしか話せません、
+{{~ end ~}}
+{{~ # ★10以上のスキルのみを取得し何が得意かを表示 ~}}
+{{~ result = [] ~}}
+{{~ for item in (p.skills | string.replace "Skills: " "" | string.split ", ") ~}}
+{{~ parts = item | string.split ": " ~}}
+{{~ name = parts[0] | string.strip ~}}
+{{~ val = parts[1] | string.strip ~}}
+{{~ if val == "11" || val == "12" || val == "13" || val == "14" || val == "15" || val == "16" || val == "17" || val == "18" || val == "19" || val == "20" ~}}
+{{~ result = result | array.add name ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ if result | array.size > 0 ~}}
+{{ result | array.join "、" }}スキルを使う作業が得意です
+{{~ end ~}}
+{{~ # ★辞書を使い欲求を描写 ~}}
+{{~ for Thought_condition in Thought_conditions ~}}
+{{~ if p.fullthought | string.contains Thought_condition.key ~}}
+{{ Thought_condition.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ★辞書を使い怪我、病気を描写（痛みが強い時のみ描写） ~}}
+{{~ if (p.fullthought | string.contains "深刻な痛み") || (p.fullthought | string.contains "激しい痛み") || (p.fullthought | string.contains "気が遠くなる痛み") ~}}
+{{~ for Health_condition in Health_conditions ~}}
+{{~ if p.health | string.contains Health_condition.key ~}}
+{{ Health_condition.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ★辞書を使い常に表示したい健康状態を描写 ~}}
+{{~ for Status_condition in Status_conditions ~}}
+{{~ if p.health | string.contains Status_condition.key ~}}
+{{ Status_condition.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ★立てるかチェック ~}}
+{{~ if p.Downed ~}}
+立つことが出来ません
+{{~ end ~}}
+{{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
+{{~ if maptemp >= 40 || maptemp <= -15 ~}}
+{{~ if !(p.location | string.contains "外気温") && (p.location | string.contains "-75C") ~}}
+{{ p.location }}にいます、真空状態です
+{{~ else if !(p.location | string.contains "外気温") ~}}
+{{ p.location }}にいます
+{{~ else ~}}
+屋外で活動中です
+{{~ end ~}}
+{{~ end ~}}
+{{~ #ポーンループ終了 ~}}
+{{~ end ~}}
+{{~ end ~}}
