@@ -48,7 +48,6 @@
 {{~ if map.dangerWatcher.DangerRating | string.contains "High" ~}}
 周囲に敵対勢力が存在し、緊張感が高まっています
 {{~ end ~}}
-
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{ map_temp =  map.mapTemperature.OutdoorTemp | math.floor}}
 {{~ if map_temp >= 40 || map_temp <= -15~}}
