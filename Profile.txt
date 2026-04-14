@@ -2,7 +2,7 @@
 {{~ # 使用の際は新しくエントリを作成し、Base Instructionの下（JSON Formatを使っている場合はその下）に設置する。Pawn Profilesは削除かオフにする。また、コンテキストフィルターのポーン情報、環境は全てONにする（OFFだとRimtalk独自プロパティが取得出来ない） ~}}
 {{~ # ▼辞書セット、自環境に合わせてここを編集▼ ~}}
 {{~ # ▼表示したい天気、天候がkeyの場合valueを出力、開発者モードのChange weatherで大体の天気を確認可能 ~}}
-{{~ Weather_map = {
+{{~ weather_map = {
     "軌道上": "軌道上にいます",
     "地底": "地底にいます",
     "地下洞窟": "地下洞窟にいます",
@@ -16,24 +16,29 @@
     "死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません"
 } ~}}
 {{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力 ~}}
-{{~ Thought_conditions = {
+{{~ thought_conditions = {
     "ひどい栄養失調": "十分な栄養が摂れておらず活動に支障が出ています",
     "飢餓": "餓死寸前で呂律すら回りません",
     "激しい痛み": "激しい痛みを感じています",
     "気が遠くなる痛み": "気が遠くなるほどの痛みを感じています",
-    "お弁当を食べた": "美味しいお弁当を食べて喜んでいます"
+    "弁当を食べた": "美味しいお弁当を食べて喜んでいます"
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
-{{~ Health_conditions = {
+{{~ health_conditions = {
     "傷からの感染症": "傷から発症した感染症で苦しんでいます",
     "刺し傷": "刺し傷により苦しんでいます",
     "切創": "切創により苦しんでいます",
     "凍傷":"凍傷で苦しんでいます"
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みに関係なく常に表示） ~}}
-{{~ Status_conditions = {
+{{~ status_conditions = {
     "低体温症": "外気や場所によって体温が下がり寒がっています",
     "ゴージュースによる興奮": "ゴージュースという戦闘用に開発された薬物を飲み興奮状態です"
+} ~}}
+{{~ # ▼置換、非表示にした特性情報、keyが特性欄にある場合、valueに置換する ~}}
+{{~ ability_conditions = {
+    "よたか": "夜に活動するのが好き",
+    "歓喜": "みんなに愛される存在"
 } ~}}
 {{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
 {{~ if map.IsPlayerHome != true ~}}
@@ -44,12 +49,12 @@
 周囲に敵対勢力が存在し、緊張感が高まっています
 {{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
-{{ maptemp =  map.mapTemperature.OutdoorTemp | math.floor}}
-{{~ if maptemp >= 40 || maptemp <= -15~}}
-外気温は{{maptemp}}Cです
+{{ map_temp =  map.mapTemperature.OutdoorTemp | math.floor}}
+{{~ if map_temp >= 40 || map_temp <= -15~}}
+外気温は{{map_temp}}Cです
 {{~ end ~}}
 {{~ # ★辞書を使い天気、空間を描写 ~}}
-{{~ for weather in Weather_map ~}}
+{{~ for weather in weather_map ~}}
 {{~ if map.weather | string.contains weather.key ~}}
 {{ weather.value }}
 {{~ end ~}}
@@ -80,39 +85,43 @@
 {{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
 この子は幼く「あう～」のような赤ちゃん言葉でしか話せません、
 {{~ end ~}}
-{{~ # ★才能・性格を表示（辞書を作ると質が上がるけど流石に多すぎる） ~}}
-{{ p.traits | string.replace "Traits: " "特性:"}}
+{{~ # ★辞書を使い才能・性格を整形し表示 ~}}
+{{ formatted_traits = p.traits | string.replace "Traits: " "特性:"}}
+{{~ for ability_condition in ability_conditions ~}}
+{{ formatted_traits  = formatted_traits | string.replace ability_condition.key ability_condition.value }}
+{{~ end ~}}
+{{ formatted_traits }}
 {{~ # ★10以上のスキルのみを取得し何が得意かを表示 ~}}
-{{~ result = [] ~}}
+{{~ skill_names = [] ~}}
 {{~ for item in (p.skills | string.replace "Skills: " "" | string.split ", ") ~}}
 {{~ parts = item | string.split ": " ~}}
 {{~ name = parts[0] | string.strip ~}}
 {{~ val = parts[1] | string.strip ~}}
 {{~ if val == "11" || val == "12" || val == "13" || val == "14" || val == "15" || val == "16" || val == "17" || val == "18" || val == "19" || val == "20" ~}}
-{{~ result = result | array.add name ~}}
+{{~ skill_names = skill_names | array.add name ~}}
 {{~ end ~}}
 {{~ end ~}}
-{{~ if result | array.size > 0 ~}}
-{{ result | array.join "、" }}スキルを使う作業が得意です
+{{~ if skill_names | array.size > 0 ~}}
+{{ skill_names | array.join "、" }}スキルを使う作業が得意です
 {{~ end ~}}
 {{~ # ★辞書を使い欲求を描写 ~}}
-{{~ for Thought_condition in Thought_conditions ~}}
-{{~ if p.fullthought | string.contains Thought_condition.key ~}}
-{{ Thought_condition.value }}
+{{~ for thought_condition in thought_conditions ~}}
+{{~ if p.fullthought | string.contains thought_condition.key ~}}
+{{ thought_condition.value }}
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★辞書を使い怪我、病気を描写（痛みが強い時のみ描写） ~}}
 {{~ if (p.fullthought | string.contains "深刻な痛み") || (p.fullthought | string.contains "激しい痛み") || (p.fullthought | string.contains "気が遠くなる痛み") ~}}
-{{~ for Health_condition in Health_conditions ~}}
-{{~ if p.health | string.contains Health_condition.key ~}}
-{{ Health_condition.value }}
+{{~ for health_condition in health_conditions ~}}
+{{~ if p.health | string.contains health_condition.key ~}}
+{{ health_condition.value }}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★辞書を使い常に表示したい健康状態を描写 ~}}
-{{~ for Status_condition in Status_conditions ~}}
-{{~ if p.health | string.contains Status_condition.key ~}}
-{{ Status_condition.value }}
+{{~ for status_condition in status_conditions ~}}
+{{~ if p.health | string.contains status_condition.key ~}}
+{{ status_condition.value }}
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★立てるかチェック ~}}
@@ -126,8 +135,8 @@
 屋外にいます
 {{~ else ~}}
 {{~ if !(p.location | string.contains "未定")}}
-{{~ if maptemp >= 40 || maptemp <= -15 ~}}
-{{~ if !(p.location | string.contains "外気温") && (maptemp == -75) ~}}
+{{~ if map_temp >= 40 || map_temp <= -15 ~}}
+{{~ if !(p.location | string.contains "外気温") && (map_temp == -75) ~}}
 {{ p.location }}にいます、真空状態です
 {{~ else if !(p.location | string.contains "外気温") ~}}
 {{ p.location }}にいます
@@ -136,17 +145,21 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★ポーンは今何をしているか、精神崩壊、戦闘中等で分岐処理、膨大かつ英語の場合もあるので注意 ~}}
-{{~ if p.job | string.contains "精神状態" ~}}
-{{ p }}は精神が弱っています
-{{ p.job }}
-{{~else if p.job | string.contains "Attacking" ~}}
+{{~ formatted_job =  p.job | string.replace "(traveling to)" "" ~}}
+{{~ if formatted_job | string.contains "精神状態" ~}}
+{{ p.name }}は精神が弱っています
+{{ formatted_job }}
+{{~else if formatted_job | string.contains "Attacking" ~}}
 {{ weapon }}で敵を攻撃中です
-{{~ else if p.job | string.contains "攻撃中"~}}
-{{ weapon }}で{{ p.job }}
-{{~ else if p.job | string.contains "狩っている"~}}
-{{ weapon }}で{{ p.job }}
+{{~ else if formatted_job | string.contains "攻撃中"~}}
+{{ weapon }}で{{ formatted_job}}
+{{~ else if formatted_job | string.contains "狩っている" ~}}
+{{ weapon }}で{{ formatted_job }}
+{{~ else if formatted_job | string.contains "(死亡)を摂っている" ~}}
+{{~ eat_job = formatted_job | string.replace "を摂っている" "の死体をそのまま食べている" ~}}
+他に食べるものがなく、{{eat_job}}
 {{~ else ~}}
-{{ p.job }}
+{{ formatted_job }}
 {{~ end ~}}
 {{~ #ポーン取得ループ終了 ~}}
 {{~ end ~}}
