@@ -7,14 +7,20 @@
 {{~ end ~}}
 {{~ # ★ダウンしているかどうか ~}}
 {{~ if prompt | string.contains "downed in pain" ~}}
-{{pawn}}は痛みにより立ち上がれない状態です
+{{ pawn }}は痛みにより立ち上がれない状態です
 {{~ end ~}}
 {{~ # ★インシデント発生時、大量の分岐が必要かも ~}}
 {{ if prompt | string.contains "Talk about incident"~}}
-{{~ incident = prompt | string.split "(Talk about incident)\n[" | array.last | string.split "]" | array.first ~}}
-以下の出来事について話しているようです"{{ incident }}"
+{{~ incident = prompt | string.split "(Talk about incident)
+[" | array.last | string.split "]" | array.first ~}}
 {{~ if incident | string.contains "友人や家族が" ~}}
-仲間を失ってしまったようです
+{{ dead_incident = incident | string.split "\n" | array.first}}
+以下の要因で仲間が死んでしまったことについて言及しているようです
+{{ dead_incident }}
+
+{{ pawn.Map.mapPawns.SpawnedColonyMechs}}{{ pawn.Map.mapPawns.SpawnedHungryPawns}}
+{{~ else ~}}
+以下の出来事について話しているようです"{{ incident }}"
 {{~ end ~}}
 {{~ # ★精神崩壊時 ~}}
 {{~ else if prompt | string.contains "mental break" ~}}
