@@ -21,7 +21,8 @@
     "飢餓": "餓死寸前で呂律すら回りません",
     "激しい痛み": "激しい痛みを感じています",
     "気が遠くなる痛み": "気が遠くなるほどの痛みを感じています",
-    "弁当を食べた": "美味しいお弁当を食べて喜んでいます"
+    "弁当を食べた": "美味しいお弁当を食べて喜んでいます",
+    "夜のよたか": "現在時刻は夜です"
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
 {{~ health_conditions = {
@@ -40,13 +41,24 @@
     "よたか": "夜に活動するのが好き",
     "歓喜": "みんなに愛される存在"
 } ~}}
+{{~ # ▼心情用辞書 ~}}
+{{~ mood_map = {
+    "幸せ": "幸せに過ごしています",
+    "満足": "現状に満足しています",
+    "普通": "精神状態は安定しています",
+    "ストレス気味": "ほんの少し現状に不満があるようです",
+    "不安": "ストレスを抱えているようです",
+    "崩壊寸前": "精神状態は限界に達しており崩壊寸前です"
+} ~}}
 {{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
 {{~ if map.IsPlayerHome != true ~}}
 自分達のコロニー外で遠征活動中です
 {{~ end ~}}
 {{~ # ★周囲に敵対派閥がいるかどうか ~}}
 {{~ if map.dangerWatcher.DangerRating | string.contains "High" ~}}
-周囲に敵対勢力が存在し、緊張感が高まっています
+周囲に敵対勢力が存在し、戦闘が起きている、または臨戦態勢です
+{{~ else if map.dangerWatcher.DangerRating | string.contains "Low"}}
+周囲に危険度がまだ低い敵対勢力が存在し、最低限の警戒中です
 {{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{ map_temp =  map.mapTemperature.OutdoorTemp | math.floor}}{{~ if map_temp >= 40 || map_temp <= -15~}}
@@ -80,6 +92,12 @@
 {{ role.value }}
 {{~ end ~}}
 {{~ end ~}}
+{{~ # ★現在の心情 ~}}
+{{~ for mood in mood_map ~}}
+{{~ if p.mood | string.contains mood.key ~}}
+{{ mood.value }}
+{{~ end ~}}
+{{~ end ~}}
 {{~ # ★赤ちゃんチェック ~}}
 {{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
 この子は幼く「あう～」のような赤ちゃん言葉でしか話せません
@@ -106,6 +124,14 @@
 {{ thought_condition.value }}
 {{~ end ~}}
 {{~ end ~}}
+{{~ # ★身近な人や動物の死を描写 結構ノイズになる可能性あり、不要なら■■■部分まで削除~}}
+{{~ clean_thought = p.fullthought | string.replace "Thoughts: " "" ~}}
+{{~ for thought_line in (clean_thought | string.split ", ") ~}}
+{{~ if (thought_line | string.contains "が死んだ") && !(thought_line | string.contains "ライバル") && !(thought_line | string.contains "入植者")~}}
+{{ thought_line | string.split "(" | array.first | string.strip }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ■■■不要であればここまでを削除~}}
 {{~ # ★辞書を使い怪我、病気を描写（痛みが強い時のみ描写） ~}}
 {{~ if (p.fullthought | string.contains "深刻な痛み") || (p.fullthought | string.contains "激しい痛み") || (p.fullthought | string.contains "気が遠くなる痛み") ~}}
 {{~ for health_condition in health_conditions ~}}
@@ -142,18 +168,54 @@
 {{~ end ~}}
 {{~ # ★ポーンは今何をしているか、精神崩壊、戦闘中等で分岐処理、膨大かつ英語の場合もあるので注意 ~}}
 {{~ formatted_job =  p.job | string.replace "(traveling to)" "" ~}}
+{{~ # ★遺体に関する作業の場合はその事を明確にする ~}}
+{{~ if formatted_job | string.contains "(死亡)を" ~}}
+{{~ # (死亡)より前の部分を取得 ~}}
+{{~ before_dead = formatted_job | string.split "(死亡)" | array.first ~}}
+{{~ after_dead = formatted_job | string.split "(死亡)" | array.last ~}}
+{{~ # フラグ判定：ここにカンマがあれば職業有りなので人間 ~}}
+{{~ is_human_dead = before_dead | string.contains "," ~}}
+{{~ if is_human_dead ~}}
+{{~ dead_name = before_dead | string.split "," | array.first | string.strip ~}}
+{{~ else ~}}
+{{~ dead_name = before_dead | string.strip ~}}
+{{~ end ~}}
+{{~ end ~}}
 {{~ if formatted_job | string.contains "精神状態" ~}}
 {{ p.name }}は精神が弱っています
 {{ formatted_job }}
-{{~else if formatted_job | string.contains "Attacking" ~}}
+{{~ else if formatted_job | string.contains "Attacking" ~}}
+{{~
+ if weapon != "" ~}}
 {{ weapon }}で敵を攻撃中です
+{{~ else ~}}
+素手で敵を攻撃中です
+{{~ end ~}}
 {{~ else if formatted_job | string.contains "攻撃中"~}}
-{{ weapon }}で{{ formatted_job}}
+{{~
+ if weapon != "" ~}}
+{{ weapon }}で{{ formatted_job }}
+{{~ else ~}}
+素手で{{ formatted_job }}
+{{~ end ~}}
 {{~ else if formatted_job | string.contains "狩っている" ~}}
 {{ weapon }}で{{ formatted_job }}
 {{~ else if formatted_job | string.contains "(死亡)を摂っている" ~}}
-{{~ eat_job = formatted_job | string.replace "を摂っている" "の死体をそのまま食べている" ~}}
-他に食べるものがなく、{{eat_job}}
+{{~ if is_human_dead ~}}
+他に食べるものがなく、{{ dead_name }}という名を持つ人間の死体をそのまま食べている
+{{~ else ~}}
+他に食べるものがなく、{{ dead_name }}の死体をそのまま食べている
+{{~ end ~}}
+{{~ else if formatted_job | string.contains "(死亡)" ~}}
+
+{{~ if is_human_dead ~}}
+{{ dead_name }}という名を持つ人間の死体{{after_dead}}
+{{~ else ~}}
+{{ dead_name }}の死体{{after_dead}}
+{{~ end ~}}
+{{~ else if formatted_job | string.contains "うろうろしている" ~}}
+
+次にやることを探しています
 {{~ else ~}}
 {{ formatted_job }}
 {{~ end ~}}
