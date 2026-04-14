@@ -1,0 +1,27 @@
+{{~ #Q.ここは何？A.状況によって変化するprompt専用の場所、promptはインシデント発生時には特殊な定型文を出力したりする ~}}
+{{~ # starts conversation等の定型文はContextBuilder.cs内に記載 ~}}
+{{~ # promptをそのまま出力してしまうと大量の情報がついてしまうため簡略化 ~}}
+{{~ # ★戦闘中かどうか ~}}
+{{~ if prompt | string.contains "urgent tone" ~}}
+戦闘中で余裕がない状態です
+{{~ end ~}}
+{{~ # ★ダウンしているかどうか ~}}
+{{~ if prompt | string.contains "downed in pain" ~}}
+{{pawn}}は痛みにより立ち上がれない状態です
+{{~ end ~}}
+{{~ # ★インシデント発生時、大量の分岐が必要かも ~}}
+{{ if prompt | string.contains "Talk about incident"~}}
+{{~ incident = prompt | string.split "(Talk about incident)\n[" | array.last | string.split "]" | array.first ~}}
+以下の出来事について話しているようです"{{ incident }}"
+{{~ if incident | string.contains "友人や家族が" ~}}
+仲間を失ってしまったようです
+{{~ end ~}}
+{{~ # ★精神崩壊時 ~}}
+{{~ else if prompt | string.contains "mental break" ~}}
+{{pawn}}の精神状態から生み出されるシーンを描写してください
+{{~ # ★通常時 ~}}
+{{~ else if prompt | string.contains "short monologue" ~}}
+独り言を言っているようです
+{{~ else if prompt | string.contains "starts conversation" ~}}
+{{pawn}}達は会話をしているようです
+{{~ end ~}}
