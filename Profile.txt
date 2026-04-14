@@ -48,6 +48,7 @@
 {{~ if map.dangerWatcher.DangerRating | string.contains "High" ~}}
 周囲に敵対勢力が存在し、緊張感が高まっています
 {{~ end ~}}
+
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{ map_temp =  map.mapTemperature.OutdoorTemp | math.floor}}
 {{~ if map_temp >= 40 || map_temp <= -15~}}
@@ -85,12 +86,12 @@
 {{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
 この子は幼く「あう～」のような赤ちゃん言葉でしか話せません、
 {{~ end ~}}
+
 {{~ # ★辞書を使い才能・性格を整形し表示 ~}}
 {{ formatted_traits = p.traits | string.replace "Traits: " "特性:"}}
 {{~ for ability_condition in ability_conditions ~}}
 {{ formatted_traits  = formatted_traits | string.replace ability_condition.key ability_condition.value }}
-{{~ end ~}}
-{{ formatted_traits }}
+{{end}}{{ formatted_traits }}
 {{~ # ★10以上のスキルのみを取得し何が得意かを表示 ~}}
 {{~ skill_names = [] ~}}
 {{~ for item in (p.skills | string.replace "Skills: " "" | string.split ", ") ~}}
