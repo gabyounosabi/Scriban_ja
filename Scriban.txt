@@ -50,7 +50,7 @@
 外気温は{{maptemp}}Cです
 {{~ end ~}}
 {{~ # ★辞書を使い天気、空間を描写 ~}}
-{{~ for weather in weather_map ~}}
+{{~ for weather in Weather_map ~}}
 {{~ if map.weather | string.contains weather.key ~}}
 {{ weather.value }}
 {{~ end ~}}
@@ -59,7 +59,8 @@
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
 {{ p.name }}:{{~ if p.gender | string.contains "Male" ~}}男性{{~ else ~}}女性{{ end }} {{ p.age }}歳
-{{~ # ★所持武器名称取得 ~}}
+{{~ # ★所持武器名称取得、狩りや戦闘時のみ武器名を表示 ~}}
+{{~ weapon = "" ~}}
 {{~ if p.equipment | string.contains "Weapon:" ~}}
 {{~ weapon = p.equipment | string.split "Weapon: " | array.last | string.split ", Apparel:" | array.first | string.strip ~}}
 {{~ end ~}}
@@ -117,7 +118,7 @@
 立つことが出来ません
 {{~ end ~}}
 {{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
-{{~ if p.location | string.contains "外気温" && map.weather | string.contains "軌道上"}}
+{{~ if p.location | string.contains "外気温" && map.weather | string.contains "軌道上" ~}}
 宇宙空間で活動中です
 {{~else if p.location | string.contains "外気温"~}}
 屋外で活動中です
@@ -130,7 +131,7 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★ポーンは今何をしているか ~}}
+{{~ # ★ポーンは今何をしているか、精神崩壊、戦闘中等で分岐処理、膨大かつ英語の場合もあるので注意 ~}}
 {{~ if p.job | string.contains "精神状態" ~}}
 {{ p }}は精神が弱っています
 {{ p.job }}
