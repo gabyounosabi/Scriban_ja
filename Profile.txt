@@ -81,6 +81,7 @@
 {{~ if p.equipment | string.contains "Weapon:" ~}}
 {{~ weapon = p.equipment | string.split "Weapon: " | array.last | string.split ", Apparel:" | array.first | string.strip ~}}
 {{~ end ~}}
+
 {{~ # ★自分で設定したペルソナ ~}}
 {{ p.personality }}
 {{~ # ★役割 ~}}
@@ -100,7 +101,6 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★ポーンの社交関係（ノイズになる可能性あり） ~}}
-
 {{~ if p.social != "" ~}}
 {{~ for rel_item in (p.social | string.replace "Relations: " "" | string.split ", ") ~}}
 {{~ rel_parts = rel_item | string.split "(" ~}}
