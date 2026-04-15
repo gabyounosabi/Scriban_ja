@@ -98,12 +98,15 @@
 {{ mood.value }}
 {{~ end ~}}
 {{~ end ~}}
+{{~ # ★ポーンの社交関係（ノイズになる可能性あり） ~}}
+{{~ p.social ~}}
 {{~ # ★赤ちゃんチェック ~}}
 {{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
 この子は幼く「あう～」のような赤ちゃん言葉でしか話せません
 {{~ end ~}}
 {{~ # ★辞書を使い才能・性格を整形し表示 ~}}
-{{ formatted_traits = p.traits | string.replace "Traits: " "特性:"}}{{~ for ability_condition in ability_conditions ~}}
+{{ formatted_traits = p.traits | string.replace "Traits: " "特性:"}}
+{{~ for ability_condition in ability_conditions ~}}
 {{ formatted_traits  = formatted_traits | string.replace ability_condition.key ability_condition.value }}{{end}}{{ formatted_traits }}
 {{~ # ★10以上のスキルのみを取得し何が得意かを表示 ~}}
 {{~ skill_names = [] ~}}
