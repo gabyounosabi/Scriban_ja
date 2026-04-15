@@ -182,18 +182,16 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ if formatted_job | string.contains "精神状態" ~}}
-{{ p.name }}は精神が弱っています
+精神が弱っています
 {{ formatted_job }}
 {{~ else if formatted_job | string.contains "Attacking" ~}}
-{{~
- if weapon != "" ~}}
+{{~ if weapon != "" ~}}
 {{ weapon }}で敵を攻撃中です
 {{~ else ~}}
 素手で敵を攻撃中です
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "攻撃中"~}}
-{{~
- if weapon != "" ~}}
+{{~ if weapon != "" ~}}
 {{ weapon }}で{{ formatted_job }}
 {{~ else ~}}
 素手で{{ formatted_job }}
@@ -207,14 +205,12 @@
 他に食べるものがなく、{{ dead_name }}の死体をそのまま食べている
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "(死亡)" ~}}
-
 {{~ if is_human_dead ~}}
 {{ dead_name }}という名を持つ人間の死体{{after_dead}}
 {{~ else ~}}
 {{ dead_name }}の死体{{after_dead}}
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "うろうろしている" ~}}
-
 次にやることを探しています
 {{~ else ~}}
 {{ formatted_job }}
