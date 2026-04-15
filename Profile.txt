@@ -156,7 +156,7 @@
 {{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
 {{~ if p.location | string.contains "外気温" && map.weather | string.contains "軌道上" ~}}
 宇宙空間で活動中です
-{{~ else if p.location | string.contains "外気温"~}}
+{{~ else if p.location | string.contains "外気温" ~}}
 屋外にいます
 {{~ else ~}}
 {{~ if !(p.location | string.contains "未定")}}
