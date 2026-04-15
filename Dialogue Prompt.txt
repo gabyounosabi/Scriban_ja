@@ -24,3 +24,12 @@
 {{~ else if prompt | string.contains "starts conversation" ~}}
 {{pawn}}達は会話をしているようです
 {{~ end ~}}
+{{~ # ★家族情報取得 ~}}
+{{~ for p in pawns ~}}
+{{~ if p.RaceProps.Humanlike ~}}
+{{for f_name in p.relations.RelatedPawns}}
+{{if prompt  | string.contains f_name}}{{f_name}}は{{p.name}}の家族です
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
