@@ -5,10 +5,6 @@
 {{~ if prompt | string.contains "urgent tone" ~}}
 戦闘中で余裕がない状態です
 {{~ end ~}}
-{{~ # ★ダウンしているかどうか ~}}
-{{~ if prompt | string.contains "downed in pain" ~}}
-{{ pawn }}は痛みにより立ち上がれない状態です
-{{~ end ~}}
 {{~ # ★インシデント発生時、大量の分岐が必要かも ~}}
 {{ if prompt | string.contains "Talk about incident"~}}
 {{~ incident = prompt | string.split "[" | array.last | string.split "]" | array.first ~}}
