@@ -27,6 +27,7 @@
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
 {{~ health_conditions = {
     "傷からの感染症": "傷から発症した感染症で苦しんでいます",
+    "打撲": "打撲により苦しんでいます",
     "刺し傷": "刺し傷により苦しんでいます",
     "切創": "切創により苦しんでいます",
     "凍傷":"凍傷で苦しんでいます"
@@ -99,7 +100,14 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★ポーンの社交関係（ノイズになる可能性あり） ~}}
-{{~ p.social ~}}
+
+{{~ if p.social != "" ~}}
+{{~ for rel_item in (p.social | string.replace "Relations: " "" | string.split ", ") ~}}
+{{~ rel_parts = rel_item | string.split "(" ~}}
+{{~ rel_name = rel_parts | array.first | string.strip ~}}
+{{~ rel_type = rel_parts | array.last | string.split ")" | array.first | string.strip ~}}
+{{ rel_name }}は{{ rel_type }} {{ end }}
+{{~ end ~}}
 {{~ # ★赤ちゃんチェック ~}}
 {{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
 この子は幼く「あう～」のような赤ちゃん言葉でしか話せません
@@ -131,7 +139,7 @@
 {{~ clean_thought = p.fullthought | string.replace "Thoughts: " "" ~}}
 {{~ for thought_line in (clean_thought | string.split ", ") ~}}
 {{~ if (thought_line | string.contains "が死んだ") && !(thought_line | string.contains "ライバル") && !(thought_line | string.contains "入植者")~}}
-{{ thought_line | string.split "(" | array.first | string.strip }}
+{{ thought_line | string.split "(" | array.first | string.strip | string.replace "私の" "" | string.replace "が死んだ" "が死んで悲しんでいます" }}
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ■■■不要であればここまでを削除~}}
@@ -191,7 +199,8 @@
 {{~ if weapon != "" ~}}
 {{ weapon }}で敵を攻撃中です
 {{~ else ~}}
-素手で敵を攻撃中です
+素手で{{ p.TargetCurrentlyAimingAt.Label }}
+を攻撃中です
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "攻撃中"~}}
 {{~ if weapon != "" ~}}
