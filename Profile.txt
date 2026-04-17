@@ -52,7 +52,7 @@
     "崩壊寸前": "精神状態は限界に達しており崩壊寸前です"
 } ~}}
 {{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
-{{~ if map.IsPlayerHome != true ~}}
+{{~ if pawn.Map.IsPlayerHome == false ~}}
 自分達のコロニー外で遠征活動中です
 {{~ end ~}}
 {{~ # ★周囲に敵対派閥がいるかどうか ~}}
@@ -62,20 +62,21 @@
 周囲に危険度がまだ低い敵対勢力が存在し、最低限の警戒中です
 {{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
-{{ map_temp =  map.mapTemperature.OutdoorTemp | math.floor}}{{~ if map_temp >= 40 || map_temp <= -15~}}
-外気温は{{map_temp}}Cです
+{{ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor}}{{~ if map_temp >= 40 || map_temp <= -15~}}
+外気温は{{~ map_temp ~}}Cです
 {{~ end ~}}
 {{~ # ★辞書を使い天気、空間を描写 ~}}
 {{~ for weather in weather_map ~}}
-{{~ if map.weather | string.contains weather.key ~}}
-{{ weather.value }}
+{{~ if pawn.Map.weather | string.contains weather.key ~}}
+{{~ weather.value ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★ポーン取得ループ開始 ~}}
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
+{{~ social_all = social_all | array.add p.relations.RelatedPawns ~}}
 
-{{ p.name }}:{{~ if p.gender | string.contains "Male" ~}}男性{{~ else ~}}女性{{ end }} {{ p.age }}歳
+{{~ p.name ~}}:{{~ if p.gender | string.contains "Male" ~}}男性{{~ else ~}}女性{{~ end }} {{ p.age ~}}歳
 {{~ # ★所持武器名称取得、狩りや戦闘時のみ武器名を表示 ~}}
 {{~ weapon = "" ~}}
 {{~ if p.equipment | string.contains "Weapon:" ~}}
@@ -99,22 +100,16 @@
 {{ mood.value }}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★ポーンの社交関係（ノイズになる可能性あり） ~}}
-{{~ if p.social != "" ~}}
-{{~ for rel_item in (p.social | string.replace "Relations: " "" | string.split ", ") ~}}
-{{~ rel_parts = rel_item | string.split "(" ~}}
-{{~ rel_name = rel_parts | array.first | string.strip ~}}
-{{~ rel_type = rel_parts | array.last | string.split ")" | array.first | string.strip ~}}
-{{ rel_name }}は{{ rel_type }}{{~ end ~}}
-{{~ end ~}}
 {{~ # ★赤ちゃんチェック ~}}
 {{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
 この子は幼く「あう～」のような赤ちゃん言葉でしか話せません
 {{~ end ~}}
 {{~ # ★辞書を使い才能・性格を整形し表示 ~}}
-{{ formatted_traits = p.traits | string.replace "Traits: " "特性:"}}
+{{~ formatted_traits = p.traits | string.replace "Traits: " "特性:" ~}}
 {{~ for ability_condition in ability_conditions ~}}
-{{ formatted_traits  = formatted_traits | string.replace ability_condition.key ability_condition.value }}{{end}}{{ formatted_traits }}
+{{~ formatted_traits  = formatted_traits | string.replace ability_condition.key ability_condition.value ~}}
+{{~ end ~}}
+{{ formatted_traits }}
 {{~ # ★10以上のスキルのみを取得し何が得意かを表示 ~}}
 {{~ skill_names = [] ~}}
 {{~ for item in (p.skills | string.replace "Skills: " "" | string.split ", ") ~}}
@@ -137,7 +132,7 @@
 {{~ # ★身近な人や動物の死を描写 結構ノイズになる可能性あり、不要なら■■■部分まで削除~}}
 {{~ clean_thought = p.fullthought | string.replace "Thoughts: " "" ~}}
 {{~ for thought_line in (clean_thought | string.split ", ") ~}}
-{{~ if (thought_line | string.contains "が死んだ") && !(thought_line | string.contains "ライバル") && !(thought_line | string.contains "入植者")~}}
+{{~ if (thought_line | string.contains "が死んだ") && !(thought_line | string.contains "ライバル") && !(thought_line | string.contains "入植者") ~}}
 {{ thought_line | string.split "(" | array.first | string.strip | string.replace "私の" "" | string.replace "が死んだ" "が死んで悲しんでいます" }}
 {{~ end ~}}
 {{~ end ~}}
@@ -169,7 +164,7 @@
 {{~ if !(p.location | string.contains "未定")}}
 {{~ if map_temp >= 40 || map_temp <= -15 ~}}
 {{~ if !(p.location | string.contains "外気温") && (map_temp == -75) ~}}
-{{ p.location }}にいます、真空状態です
+{{~ p.location ~}}にいます、真空状態です
 {{~ else if !(p.location | string.contains "外気温") ~}}
 {{ p.location }}にいます
 {{~ end ~}}
@@ -178,7 +173,7 @@
 {{~ end ~}}
 {{~ # ★ポーンは今何をしているか、精神崩壊、戦闘中等で分岐処理、膨大かつ英語の場合もあるので注意 ~}}
 {{~ formatted_job =  p.job | string.replace "(traveling to)" "" ~}}
-{{~ # ★遺体に関する作業の場合はその事を明確にする ~}}
+{{~ # ★遺体に関する作業の場合は人か動物かを明確にする ~}}
 {{~ if formatted_job | string.contains "(死亡)を" ~}}
 {{~ # (死亡)より前の部分を取得 ~}}
 {{~ before_dead = formatted_job | string.split "(死亡)" | array.first ~}}
@@ -198,8 +193,7 @@
 {{~ if weapon != "" ~}}
 {{ weapon }}で敵を攻撃中です
 {{~ else ~}}
-素手で{{ p.TargetCurrentlyAimingAt.Label }}
-を攻撃中です
+素手で{{ p.TargetCurrentlyAimingAt.Label }}を攻撃中です
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "攻撃中"~}}
 {{~ if weapon != "" ~}}
@@ -217,14 +211,23 @@
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "(死亡)" ~}}
 {{~ if is_human_dead ~}}
-{{ dead_name }}という名を持つ人間の死体{{after_dead}}
+{{ dead_name }}という名を持つ人間の死体{{ after_dead }}
 {{~ else ~}}
-{{ dead_name }}の死体{{after_dead}}
+{{ dead_name }}の死体{{ after_dead }}
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "うろうろしている" ~}}
 次にやることを探しています
 {{~ else ~}}
 {{ formatted_job }}
+{{~ end ~}}
+{{~ # ★付近のポーン情報 ~}}
+{{~ if p.social != "" ~}}
+{{~ for rel_item in (p.social | string.replace "Relations: " "" | string.split ", ") ~}}
+{{~ rel_parts = rel_item | string.split "(" ~}}
+{{~ rel_name = rel_parts | array.first | string.strip ~}}
+{{~ rel_type = rel_parts | array.last | string.split ")" | array.first | string.strip ~}}
+{{~ end ~}}
+近くにいる人: {{ rel_name }}({{ rel_type }})
 {{~ end ~}}
 {{~ #ポーン取得ループ終了 ~}}
 {{~ end ~}}
