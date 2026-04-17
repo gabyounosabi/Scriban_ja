@@ -1,4 +1,3 @@
-{{~ # Q.何故こんな物を作った？ A.基本設定のままだと特定種族が常時持つ固有健康バフ（制御不能な触手）や不要な情報（心情：とても豪華な娯楽室、健康：傷跡）までLLMに渡してしまうため。このエントリを使用することで「豪華な娯楽室で遊べて最高の気分だ！」連呼を防止できる。 ~}}
 {{~ # 使用の際は新しくエントリを作成し、Base Instructionの下（JSON Formatを使っている場合はその下）に設置する。Pawn Profilesは削除かオフにする。また、コンテキストフィルターのポーン情報、環境は全てONにする（OFFだとRimtalk独自プロパティが取得出来ない） ~}}
 {{~ # ▼辞書セット、自環境に合わせてここを編集▼ ~}}
 {{~ # ▼表示したい天気、天候がkeyの場合valueを出力、開発者モードのChange weatherで大体の天気を確認可能 ~}}
@@ -51,24 +50,32 @@
     "不安": "ストレスを抱えているようです",
     "崩壊寸前": "精神状態は限界に達しており崩壊寸前です"
 } ~}}
-{{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
-{{~ if pawn.Map.IsPlayerHome == false ~}}
-自分達のコロニー外で遠征活動中です
+{{~ # ★ジョブ格納用配列 ~}}
+{{~ all_jobs = [] ~}}
+{{~ # ★全世界の死亡ポーン ~}}
+{{~ all_pawns = PawnsFinder.All_AliveOrDead ~}}
+{{~ d_pawns = [] ~}}
+{{~ for all_pawn in all_pawns ~}}
+{{~ if all_pawn.Dead ~}}
+{{~ d_pawns = diff | array.add all_pawn ~}}
 {{~ end ~}}
+{{~ end ~}}
+{{~ # ★マップ内の人型ポーン+全世界の死亡ポーン ~}}
+{{~ pawns_list = d_pawns | array.concat pawn.Map.mapPawns.AllHumanlikeSpawned ~}}
 {{~ # ★周囲に敵対派閥がいるかどうか ~}}
-{{~ if map.dangerWatcher.DangerRating | string.contains "High" ~}}
+{{~ if pawn.map.dangerWatcher.DangerRating | string.contains "High" ~}}
 周囲に敵対勢力が存在し、戦闘が起きている、または臨戦態勢です
-{{~ else if map.dangerWatcher.DangerRating | string.contains "Low"}}
-周囲に危険度がまだ低い敵対勢力が存在し、最低限の警戒中です
+{{~ else if pawn.map.dangerWatcher.DangerRating | string.contains "Low"}}
+周囲に危険度が低い敵対勢力が存在し、最低限の警戒中です
 {{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor}}{{~ if map_temp >= 40 || map_temp <= -15~}}
-外気温は{{~ map_temp ~}}Cです
+外気温は{{ map_temp }}Cです
 {{~ end ~}}
 {{~ # ★辞書を使い天気、空間を描写 ~}}
 {{~ for weather in weather_map ~}}
 {{~ if pawn.Map.weather | string.contains weather.key ~}}
-{{~ weather.value ~}}
+{{ weather.value }}
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★ポーン取得ループ開始 ~}}
@@ -107,7 +114,7 @@
 {{~ # ★辞書を使い才能・性格を整形し表示 ~}}
 {{~ formatted_traits = p.traits | string.replace "Traits: " "特性:" ~}}
 {{~ for ability_condition in ability_conditions ~}}
-{{~ formatted_traits  = formatted_traits | string.replace ability_condition.key ability_condition.value ~}}
+{{~ formatted_traits = formatted_traits | string.replace ability_condition.key ability_condition.value ~}}
 {{~ end ~}}
 {{ formatted_traits }}
 {{~ # ★10以上のスキルのみを取得し何が得意かを表示 ~}}
@@ -156,7 +163,7 @@
 自力で立つことが出来ません
 {{~ end ~}}
 {{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
-{{~ if p.location | string.contains "外気温" && map.weather | string.contains "軌道上" ~}}
+{{~ if p.location | string.contains "外気温" && p.map.weather | string.contains "軌道上" ~}}
 宇宙空間で活動中です
 {{~ else if p.location | string.contains "外気温" ~}}
 屋外にいます
@@ -164,10 +171,36 @@
 {{~ if !(p.location | string.contains "未定")}}
 {{~ if map_temp >= 40 || map_temp <= -15 ~}}
 {{~ if !(p.location | string.contains "外気温") && (map_temp == -75) ~}}
-{{~ p.location ~}}にいます、真空状態です
+{{ p.location }}にいます、真空状態です
 {{~ else if !(p.location | string.contains "外気温") ~}}
 {{ p.location }}にいます
 {{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ★派閥によって台詞を調整 ~}}
+{{~ if p.Faction.IsPlayer && p.Faction.hasname ~}}
+所属派閥:{{ p.Faction.Name }}
+{{~ else if p.Faction.IsPlayer ~}}
+生活の基盤を整えている途中です
+{{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill < -80 ~}}
+{{ p.name }}は敵対派閥{{ p.Faction.Name }}の人間です
+{{ Find.FactionManager.OfPlayer.Name }}の人間に対し挑発的な言葉を投げかけます
+{{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill > 80 ~}}
+{{ p.name }}は同盟派閥{{ p.Faction.Name }}の人間です
+{{ Find.FactionManager.OfPlayer.Name }}の人間に対し友好的な言葉を投げかけます
+{{~ else ~}}
+{{ p.name }}は別派閥{{ p.Faction.Name }}の人間です
+{{~ end ~}}
+{{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
+{{~ if p.Map.IsPlayerHome == false ~}}
+自分達のコロニー外で遠征活動中です
+{{~ end ~}}
+{{~ # ★現在マップは誰の領地か ~}}
+{{~ if Find.FactionManager.OfPlayer.hasname && p.Map.Parent.Faction.name != Find.FactionManager.OfPlayer.name ~}}
+{{~ if p.Map.Parent.Faction.PlayerGoodwill < -80 ~}}
+{{~ if p.Faction.Name == Find.FactionManager.OfPlayer.name ~}}
+敵対勢力{{ p.Map.Parent.Faction.Name }}の領地にいます
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -221,14 +254,42 @@
 {{ formatted_job }}
 {{~ end ~}}
 {{~ # ★付近のポーン情報 ~}}
-{{~ if p.social != "" ~}}
-{{~ for rel_item in (p.social | string.replace "Relations: " "" | string.split ", ") ~}}
-{{~ rel_parts = rel_item | string.split "(" ~}}
-{{~ rel_name = rel_parts | array.first | string.strip ~}}
-{{~ rel_type = rel_parts | array.last | string.split ")" | array.first | string.strip ~}}
+{{~ #★自分以外のpawns ~}}
+{{~ other_pawns = [] ~}}
+{{~ for other in pawns ~}}
+{{~ if other.name != p.name ~}}
+{{~ other_pawns = other_pawns | array.add other ~}}
 {{~ end ~}}
-近くにいる人: {{ rel_name }}({{ rel_type }})
 {{~ end ~}}
-{{~ #ポーン取得ループ終了 ~}}
+{{~ for op in other_pawns ~}}
+{{~ if p.fullsocial | string.contains op.name ~}}
+{{~ social_parts = p.fullsocial | string.split op.name ~}}
+{{~ rel_type = social_parts | array.last | string.split ")" | array.first | string.replace "(" "" | string.strip ~}}
+{{ op.name }}は{{ rel_type }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ all_jobs = all_jobs | array.add formatted_job ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ #ポーン取得ループ終わり ~}}
+{{~ #★各ポーンのジョブに外部ポーン名が含まれていた場合検知}}
+{{~ for job in all_jobs ~}}
+{{~ target_pawn = null ~}}
+{{~ for one_pawn in pawns_list ~}}
+{{~ if job | string.contains one_pawn.name ~}}
+{{~ target_pawn = one_pawn ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ if target_pawn ~}}
+{{~ if target_pawn.Faction.isPlayer ~}}
+{{ target_pawn }}は自派閥の人間です
+{{~ end ~}}
+{{~ if !(target_pawn.Faction.isPlayer) && (target_pawn.Faction.PlayerGoodwill <= -80) ~}}
+{{ target_pawn }}は敵対派閥{{ target_pawn.Faction }}所属の人間です
+{{~ else if !(target_pawn.Faction.isPlayer) && target_pawn.Faction.PlayerGoodwill >= 80 ~}}
+{{ target_pawn }}は同盟派閥{{ target_pawn.Faction }}所属の人間です
+{{~ else if !(target_pawn.Faction.isPlayer) ~}}
+{{ target_pawn }}は別派閥{{ target_pawn.Faction }}所属の人間です
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
