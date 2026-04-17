@@ -29,7 +29,7 @@
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
 {{~ for f_name in p.relations.RelatedPawns ~}}
-{{~if incident  | string.contains f_name ~}}
+{{~ if incident | string.contains f_name ~}}
 {{ f_name }}は{{ p.name }}の家族です
 {{~ end ~}}
 {{~ end ~}}
