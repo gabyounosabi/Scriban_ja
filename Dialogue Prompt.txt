@@ -1,235 +1,37 @@
-{{~ # Q.何故こんな物を作った？ A.基本設定のままだと特定種族が常時持つ固有健康バフ（制御不能な触手）や不要な情報（心情：とても豪華な娯楽室、健康：傷跡）までLLMに渡してしまうため。このエントリを使用することで「豪華な娯楽室で遊べて最高の気分だ！」連呼を防止できる。 ~}}
-{{~ # 使用の際は新しくエントリを作成し、Base Instructionの下（JSON Formatを使っている場合はその下）に設置する。Pawn Profilesは削除かオフにする。また、コンテキストフィルターのポーン情報、環境は全てONにする（OFFだとRimtalk独自プロパティが取得出来ない） ~}}
-{{~ # ▼辞書セット、自環境に合わせてここを編集▼ ~}}
-{{~ # ▼表示したい天気、天候がkeyの場合valueを出力、開発者モードのChange weatherで大体の天気を確認可能 ~}}
-{{~ weather_map = {
-    "軌道上": "軌道上にいます",
-    "地底": "地底にいます",
-    "地下洞窟": "地下洞窟にいます",
-    "施設内": "施設内にいます",
-    "不自然な闇": "屋外は異形が生み出した不自然な闇で何も見えません、人々は不安を抱えます",
-    "砂嵐": "屋外では砂嵐が吹き荒れています",
-    "血の雨": "屋外では生物が凶暴化してしまう血の雨が降っています",
-    "吹雪": "屋外では吹雪が吹き荒れています",
-    "毒雨": "屋外では有毒な雨が降っています",
-    "盲目の霧": "屋外は濃い霧に包まれています",
-    "死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません"
-} ~}}
-{{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力 ~}}
-{{~ thought_conditions = {
-    "ひどい栄養失調": "十分な栄養が摂れておらず活動に支障が出ています",
-    "飢餓": "餓死寸前で呂律すら回りません",
-    "激しい痛み": "激しい痛みを感じています",
-    "気が遠くなる痛み": "気が遠くなるほどの痛みを感じています",
-    "弁当を食べた": "美味しいお弁当を食べて喜んでいます",
-    "夜のよたか": "現在時刻は夜です"
-} ~}}
-{{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
-{{~ health_conditions = {
-    "傷からの感染症": "傷から発症した感染症で苦しんでいます",
-    "打撲": "打撲により苦しんでいます",
-    "刺し傷": "刺し傷により苦しんでいます",
-    "切創": "切創により苦しんでいます",
-    "凍傷":"凍傷で苦しんでいます"
-} ~}}
-{{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みに関係なく常に表示） ~}}
-{{~ status_conditions = {
-    "低体温症": "外気や場所によって体温が下がり寒がっています",
-    "ゴージュースによる興奮": "ゴージュースという戦闘用に開発された薬物を飲み興奮状態です"
-} ~}}
-{{~ # ▼置換、非表示にしたい特性情報、keyが特性欄にある場合、valueに置換する ~}}
-{{~ ability_conditions = {
-    "よたか": "夜に活動するのが好き",
-    "歓喜": "みんなに愛される存在"
-} ~}}
-{{~ # ▼心情用辞書 ~}}
-{{~ mood_map = {
-    "幸せ": "幸せに過ごしています",
-    "満足": "現状に満足しています",
-    "普通": "精神状態は安定しています",
-    "ストレス気味": "ほんの少し現状に不満があるようです",
-    "不安": "ストレスを抱えているようです",
-    "崩壊寸前": "精神状態は限界に達しており崩壊寸前です"
-} ~}}
-{{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
-{{~ if pawn.Map.IsPlayerHome == false ~}}
-自分達のコロニー外で遠征活動中です
+{{~ #Q.ここは何？A.状況によって変化するprompt専用の場所、promptはインシデント発生時には特殊な定型文を出力したりする。既存のDialogue Promptをそのまま上書き ~}}
+{{~ # starts conversation等の定型文はContextBuilder.cs内に記載 ~}}
+{{~ # promptをそのまま出力してしまうと大量の情報がついてしまうため簡略化 ~}}
+{{~ # ★戦闘中かどうか ~}}
+{{~ if prompt | string.contains "urgent tone" ~}}
+戦闘中で余裕がない状態です
 {{~ end ~}}
-{{~ # ★周囲に敵対派閥がいるかどうか ~}}
-{{~ if map.dangerWatcher.DangerRating | string.contains "High" ~}}
-周囲に敵対勢力が存在し、戦闘が起きている、または臨戦態勢です
-{{~ else if map.dangerWatcher.DangerRating | string.contains "Low"}}
-周囲に危険度がまだ低い敵対勢力が存在し、最低限の警戒中です
+{{~ # ★インシデント発生時、大量の分岐が必要かも ~}}
+{{ if prompt | string.contains "Talk about incident"~}}
+{{~ incident = prompt | string.split "[" | array.last | string.split "]" | array.first ~}}
+{{~ if incident | string.contains "友人や家族が" ~}}
+{{ dead_incident = incident | string.split "
+" | array.first}}
+以下の要因で仲間が死んでしまったことについて言及しているようです
+{{ dead_incident }}
+{{~ else ~}}
+以下の出来事について話しているようです"{{ incident }}"
 {{~ end ~}}
-{{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
-{{ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor}}{{~ if map_temp >= 40 || map_temp <= -15~}}
-外気温は{{~ map_temp ~}}Cです
+{{~ # ★精神崩壊時 ~}}
+{{~ else if prompt | string.contains "mental break" ~}}
+{{ pawn }}の精神状態から生み出されるシーンを描写してください
+{{~ # ★通常時 ~}}
+{{~ else if prompt | string.contains "short monologue" ~}}
+独り言を言っているようです
+{{~ else if prompt | string.contains "starts conversation" ~}}
+{{ pawn }}達は会話をしているようです
 {{~ end ~}}
-{{~ # ★辞書を使い天気、空間を描写 ~}}
-{{~ for weather in weather_map ~}}
-{{~ if pawn.Map.weather | string.contains weather.key ~}}
-{{~ weather.value ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★ポーン取得ループ開始 ~}}
+{{~ # ★家族情報取得 ~}}
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
-{{~ social_all = social_all | array.add p.relations.RelatedPawns
- ~}}
-
-{{~ p.name ~}}:{{~ if p.gender | string.contains "Male" ~}}男性{{~ else ~}}女性{{~ end }} {{ p.age ~}}歳
-{{~ # ★所持武器名称取得、狩りや戦闘時のみ武器名を表示 ~}}
-{{~ weapon = "" ~}}
-{{~ if p.equipment | string.contains "Weapon:" ~}}
-{{~ weapon = p.equipment | string.split "Weapon: " | array.last | string.split ", Apparel:" | array.first | string.strip ~}}
-{{~ end ~}}
-{{~ # ★自分で設定したペルソナ ~}}
-{{ p.personality }}
-{{~ # ★役割 ~}}
-{{~ role_map = {
-    "Prisoner": "このキャラクターは捕虜として生活しています",
-    "Slave": "このキャラクターは奴隷として働かされています"
-} ~}}
-{{~ for role in role_map ~}}
-{{~ if p.role | string.contains role.key ~}}
-{{ role.value }}
+{{~ for f_name in p.relations.RelatedPawns ~}}
+{{~if incident  | string.contains f_name ~}}
+{{ f_name }}は{{ p.name }}の家族です
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★現在の心情 ~}}
-{{~ for mood in mood_map ~}}
-{{~ if p.mood | string.contains mood.key ~}}
-{{ mood.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★赤ちゃんチェック ~}}
-{{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
-この子は幼く「あう～」のような赤ちゃん言葉でしか話せません
-{{~ end ~}}
-{{~ # ★辞書を使い才能・性格を整形し表示 ~}}
-{{~ formatted_traits = p.traits | string.replace "Traits: " "特性:" ~}}
-{{~ for ability_condition in ability_conditions ~}}
-{{~ formatted_traits  = formatted_traits | string.replace ability_condition.key ability_condition.value ~}}
-{{~ end ~}}
-{{ formatted_traits }}
-{{~ # ★10以上のスキルのみを取得し何が得意かを表示 ~}}
-{{~ skill_names = [] ~}}
-{{~ for item in (p.skills | string.replace "Skills: " "" | string.split ", ") ~}}
-{{~ parts = item | string.split ": " ~}}
-{{~ name = parts[0] | string.strip ~}}
-{{~ val = parts[1] | string.strip ~}}
-{{~ if val == "11" || val == "12" || val == "13" || val == "14" || val == "15" || val == "16" || val == "17" || val == "18" || val == "19" || val == "20" ~}}
-{{~ skill_names = skill_names | array.add name ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ if skill_names | array.size > 0 ~}}
-{{ skill_names | array.join "、" }}スキルを使う作業が得意です
-{{~ end ~}}
-{{~ # ★辞書を使い欲求を描写 ~}}
-{{~ for thought_condition in thought_conditions ~}}
-{{~ if p.fullthought | string.contains thought_condition.key ~}}
-{{ thought_condition.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★身近な人や動物の死を描写 結構ノイズになる可能性あり、不要なら■■■部分まで削除~}}
-{{~ clean_thought = p.fullthought | string.replace "Thoughts: " "" ~}}
-{{~ for thought_line in (clean_thought | string.split ", ") ~}}
-{{~ if (thought_line | string.contains "が死んだ") && !(thought_line | string.contains "ライバル") && !(thought_line | string.contains "入植者") ~}}
-{{ thought_line | string.split "(" | array.first | string.strip | string.replace "私の" "" | string.replace "が死んだ" "が死んで悲しんでいます" }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ■■■不要であればここまでを削除~}}
-{{~ # ★辞書を使い怪我、病気を描写（痛みが強い時のみ描写） ~}}
-{{~ if (p.fullthought | string.contains "深刻な痛み") || (p.fullthought | string.contains "激しい痛み") || (p.fullthought | string.contains "気が遠くなる痛み") ~}}
-{{~ for health_condition in health_conditions ~}}
-{{~ if p.health | string.contains health_condition.key ~}}
-{{ health_condition.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★辞書を使い常に表示したい健康状態を描写 ~}}
-{{~ for status_condition in status_conditions ~}}
-{{~ if p.health | string.contains status_condition.key ~}}
-{{ status_condition.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★立てるかチェック ~}}
-{{~ if p.Downed ~}}
-自力で立つことが出来ません
-{{~ end ~}}
-{{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
-{{~ if p.location | string.contains "外気温" && map.weather | string.contains "軌道上" ~}}
-宇宙空間で活動中です
-{{~ else if p.location | string.contains "外気温" ~}}
-屋外にいます
-{{~ else ~}}
-{{~ if !(p.location | string.contains "未定")}}
-{{~ if map_temp >= 40 || map_temp <= -15 ~}}
-{{~ if !(p.location | string.contains "外気温") && (map_temp == -75) ~}}
-{{~ p.location ~}}にいます、真空状態です
-{{~ else if !(p.location | string.contains "外気温") ~}}
-{{ p.location }}にいます
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★ポーンは今何をしているか、精神崩壊、戦闘中等で分岐処理、膨大かつ英語の場合もあるので注意 ~}}
-{{~ formatted_job =  p.job | string.replace "(traveling to)" "" ~}}
-{{~ # ★遺体に関する作業の場合は人か動物かを明確にする ~}}
-{{~ if formatted_job | string.contains "(死亡)を" ~}}
-{{~ # (死亡)より前の部分を取得 ~}}
-{{~ before_dead = formatted_job | string.split "(死亡)" | array.first ~}}
-{{~ after_dead = formatted_job | string.split "(死亡)" | array.last ~}}
-{{~ # フラグ判定：ここにカンマがあれば職業有りなので人間 ~}}
-{{~ is_human_dead = before_dead | string.contains "," ~}}
-{{~ if is_human_dead ~}}
-{{~ dead_name = before_dead | string.split "," | array.first | string.strip ~}}
-{{~ else ~}}
-{{~ dead_name = before_dead | string.strip ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ if formatted_job | string.contains "精神状態" ~}}
-精神が弱っています
-{{ formatted_job }}
-{{~ else if formatted_job | string.contains "Attacking" ~}}
-{{~ if weapon != "" ~}}
-{{ weapon }}で敵を攻撃中です
-{{~ else ~}}
-素手で{{ p.TargetCurrentlyAimingAt.Label }}を攻撃中です
-{{~ end ~}}
-{{~ else if formatted_job | string.contains "攻撃中"~}}
-{{~ if weapon != "" ~}}
-{{ weapon }}で{{ formatted_job }}
-{{~ else ~}}
-素手で{{ formatted_job }}
-{{~ end ~}}
-{{~ else if formatted_job | string.contains "狩っている" ~}}
-{{ weapon }}で{{ formatted_job }}
-{{~ else if formatted_job | string.contains "(死亡)を摂っている" ~}}
-{{~ if is_human_dead ~}}
-他に食べるものがなく、{{ dead_name }}という名を持つ人間の死体をそのまま食べている
-{{~ else ~}}
-他に食べるものがなく、{{ dead_name }}の死体をそのまま食べている
-{{~ end ~}}
-{{~ else if formatted_job | string.contains "(死亡)" ~}}
-{{~ if is_human_dead ~}}
-{{ dead_name }}という名を持つ人間の死体{{ after_dead }}
-{{~ else ~}}
-{{ dead_name }}の死体{{ after_dead }}
-{{~ end ~}}
-{{~ else if formatted_job | string.contains "うろうろしている" ~}}
-次にやることを探しています
-{{~ else ~}}
-{{ formatted_job }}
-{{~ end ~}}
-{{~ # ★付近のポーン情報 ~}}
-{{~ if p.social != "" ~}}
-{{~ for rel_item in (p.social | string.replace "Relations: " "" | string.split ", ") ~}}
-{{~ rel_parts = rel_item | string.split "(" ~}}
-{{~ rel_name = rel_parts | array.first | string.strip ~}}
-{{~ rel_type = rel_parts | array.last | string.split ")" | array.first | string.strip ~}}
-{{~ end ~}}
-近くにいる人: {{ rel_name }}({{ rel_type }})
-{{~ end ~}}
-{{~ #ポーン取得ループ終了 ~}}
 {{~ end ~}}
 {{~ end ~}}
