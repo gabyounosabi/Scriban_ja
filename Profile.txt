@@ -95,6 +95,20 @@
 {{~ if p.equipment | string.contains "Weapon:" ~}}
 {{~ weapon = p.equipment | string.split "Weapon: " | array.last | string.split ", Apparel:" | array.first | string.strip ~}}
 {{~ end ~}}
+{{~ # ★派閥によって台詞を調整 ~}}
+{{~ if p.Faction.IsPlayer && p.Faction.hasname ~}}
+所属派閥:{{ p.Faction.Name }}
+{{~ else if p.Faction.IsPlayer ~}}
+生活の基盤を整えている途中です
+{{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill < -80 ~}}
+{{ p.name }}は敵対派閥{{ p.Faction.Name }}の人間です
+{{ Find.FactionManager.OfPlayer.Name }}の人間に対し挑発的な言葉を投げかけます
+{{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill > 80 ~}}
+{{ p.name }}は同盟派閥{{ p.Faction.Name }}の人間です
+{{ Find.FactionManager.OfPlayer.Name }}の人間に対し友好的な言葉を投げかけます
+{{~ else ~}}
+{{ p.name }}は別派閥{{ p.Faction.Name }}の人間です
+{{~ end ~}}
 {{~ # ★自分で設定したペルソナ ~}}
 {{ p.personality }}
 {{~ # ★役割 ~}}
@@ -185,20 +199,6 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
-{{~ end ~}}
-{{~ # ★派閥によって台詞を調整 ~}}
-{{~ if p.Faction.IsPlayer && p.Faction.hasname ~}}
-所属派閥:{{ p.Faction.Name }}
-{{~ else if p.Faction.IsPlayer ~}}
-生活の基盤を整えている途中です
-{{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill < -80 ~}}
-{{ p.name }}は敵対派閥{{ p.Faction.Name }}の人間です
-{{ Find.FactionManager.OfPlayer.Name }}の人間に対し挑発的な言葉を投げかけます
-{{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill > 80 ~}}
-{{ p.name }}は同盟派閥{{ p.Faction.Name }}の人間です
-{{ Find.FactionManager.OfPlayer.Name }}の人間に対し友好的な言葉を投げかけます
-{{~ else ~}}
-{{ p.name }}は別派閥{{ p.Faction.Name }}の人間です
 {{~ end ~}}
 {{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
 {{~ if p.Map.IsPlayerHome == false ~}}
