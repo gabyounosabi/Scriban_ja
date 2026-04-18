@@ -9,8 +9,7 @@
 {{ if prompt | string.contains "Talk about incident"~}}
 {{~ incident = prompt | string.split "[" | array.last | string.split "]" | array.first ~}}
 {{~ if incident | string.contains "友人や家族が" ~}}
-{{ dead_incident = incident | string.split "
-" | array.first}}
+{{~ dead_incident = incident | string.split "." | array.first ~}}
 以下の要因で仲間が死んでしまったことについて言及しているようです
 {{ dead_incident }}
 {{~ else ~}}
@@ -18,10 +17,15 @@
 {{~ end ~}}
 {{~ # ★精神崩壊時 ~}}
 {{~ else if prompt | string.contains "mental break" ~}}
+{{~ if pawns.Count == 1 ~}}
+{{ pawn }}は精神を病み、一人で思案しながら独り言を言っています
 {{ pawn }}の精神状態から生み出されるシーンを描写してください
+{{~ else ~}}
+{{ pawn }}の精神状態から生み出されるシーンを描写してください
+{{~ end ~}}
 {{~ # ★通常時 ~}}
 {{~ else if prompt | string.contains "short monologue" ~}}
-独り言を言っているようです
+{{ pawn }}は一人で思案しながら独り言を言っているようです
 {{~ else if prompt | string.contains "starts conversation" ~}}
 {{ pawn }}達は会話をしているようです
 {{~ end ~}}
