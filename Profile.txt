@@ -46,7 +46,8 @@
 {{~ # ▼置換、非表示にしたい特性情報、keyが特性欄にある場合、valueに置換する ~}}
 {{~ ability_conditions = {
     "よたか": "夜に活動するのが好き",
-    "歓喜": "みんなに愛される存在"
+    "歓喜": "みんなに愛される存在",
+    "苦悩する芸術家": "独特な芸術観",
 } ~}}
 {{~ # ▼心情用辞書 ~}}
 {{~ mood_map = {
@@ -57,10 +58,6 @@
     "不安": "ストレスを抱えているようです",
     "崩壊寸前": "精神状態は限界に達しており崩壊寸前です"
 } ~}}
-{{~ # ▼自派閥の目標設定（自派閥にのみ適応したい設定があれば） ~}}
-{{~ if Find.FactionManager.OfPlayer.HasName ~}}
-派閥:{{ Find.FactionManager.OfPlayer }}の目標は生きてこの星を脱出すること
-{{~ end ~}}
 {{~ # ★ジョブ格納用配列 ~}}
 {{~ all_jobs = [] ~}}
 {{~ # ★全世界の死亡ポーン ~}}
@@ -100,18 +97,20 @@
 {{~ weapon = p.equipment | string.split "Weapon: " | array.last | string.split ", Apparel:" | array.first | string.strip ~}}
 {{~ end ~}}
 {{~ # ★派閥によって台詞を調整 ~}}
-{{~ if p.Faction.IsPlayer && p.Faction.hasname ~}}
+{{~ if p.kindDef.defName == "Beggar"~}}
+乞食として{{ Find.FactionManager.OfPlayer.Name }}の人間に対し物乞いをしています
+{{~ else if p.Faction.IsPlayer && p.Faction.hasname ~}}
 所属派閥:{{ p.Faction.Name }}
 {{~ else if p.Faction.IsPlayer ~}}
 生活の基盤を整えている途中です
 {{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill < -80 ~}}
-{{ p.name }}は敵対派閥{{ p.Faction.Name }}の人間です
+敵対派閥{{ p.Faction.Name }}の人間です
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し挑発的な言葉を投げかけます
 {{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill > 80 ~}}
-{{ p.name }}は同盟派閥{{ p.Faction.Name }}の人間です
+同盟派閥{{ p.Faction.Name }}の人間です
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し友好的な言葉を投げかけます
 {{~ else ~}}
-{{ p.name }}は別派閥{{ p.Faction.Name }}の人間です
+別派閥{{ p.Faction.Name }}の人間です
 {{~ end ~}}
 {{~ # ★自分で設定したペルソナ ~}}
 {{ p.personality }}
@@ -261,7 +260,13 @@
 {{ dead_name }}の死体{{ after_dead }}
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "うろうろしている" ~}}
-次にやることを探しています
+{{~ if p.Faction.IsPlayer ~}}
+次にやることを探している
+{{~ else if p.kindDef.defName == "Beggar" ~}}
+自らの境遇で同情を誘い、{{ Find.FactionManager.OfPlayer.Name }}の人間に対して物乞いをしています
+{{~ else if p.Faction.def.defName == "Enpire" ~}}
+自分達の帝国領との差を誇示しながら、{{ Find.FactionManager.OfPlayer.Name }}の拠点を品定めしています
+{{~ end ~}}
 {{~ else ~}}
 {{ formatted_job }}
 {{~ end ~}}
