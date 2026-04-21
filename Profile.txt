@@ -113,9 +113,12 @@
 {{~ end ~}}
 {{~ # ■fullthoughtが安全に使用出来るかフラグ ~}}
 {{~ can_use_fullthought = false ~}}
-{{~ # ■「 ,」のような空文字列がthoughtsにあるとfullthoughtが取れない？のでフラグ作成 ~}}
-{{~ thoughts_list = p.thoughts | string.replace "Memory: " "" | string.split "," ~}}
+{{~ if p.thoughts != null ~}}
 {{~ has_empty = false ~}}
+{{~ if p.thoughts | string.contains "Memory: ," ~}}
+{{~ has_empty = true ~}}
+{{~ end ~}}
+{{~ thoughts_list = p.thoughts | string.replace "Memory: " "" | string.split "," ~}}
 {{~ for t in thoughts_list ~}}
 {{~ if (t | string.strip) == "" ~}}
 {{~ has_empty = true ~}}
@@ -123,6 +126,7 @@
 {{~ end ~}}
 {{~ if has_empty == false ~}}
 {{~ can_use_fullthought = true ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ # ■所持武器名称取得、狩りや戦闘時のみ武器名を表示 ~}}
 {{~ weapon = "" ~}}
