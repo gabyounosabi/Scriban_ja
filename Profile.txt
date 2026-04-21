@@ -23,7 +23,7 @@
     "弁当を食べた": "美味しいお弁当を食べて喜んでいます",
     "夜のよたか": "現在時刻は夜です",
     "野宿した": "野宿をしました",
-    "凍えながら夜を過ごした": "凍えながら夜を過ごしました",
+    "凍えながら夜を過ごした": "肌寒い環境で夜を過ごしました",
     "腐乱死体を見た": "腐乱死体を見た記憶が離れません",
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
@@ -58,9 +58,12 @@
     "不安": "ストレスを抱えているようです",
     "崩壊寸前": "精神状態は限界に達しており崩壊寸前です"
 } ~}}
-{{~ # ★ジョブ格納用配列 ~}}
+{{~ # ■世界情報整理■ ~}}
+{{~ # ■ジョブ格納用配列 ~}}
 {{~ all_jobs = [] ~}}
-{{~ # ★全世界の死亡ポーン ~}}
+{{~ # ■話題ポーン格納用配列 ~}}
+{{~ pawn_name_history = [] ~}}
+{{~ # ■全世界の死亡ポーン ~}}
 {{~ all_pawns = PawnsFinder.All_AliveOrDead ~}}
 {{~ d_pawns = [] ~}}
 {{~ for all_pawn in all_pawns ~}}
@@ -68,8 +71,15 @@
 {{~ d_pawns = d_pawns | array.add all_pawn ~}}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★マップ内の人型ポーン+全世界の死亡ポーン ~}}
-{{~ pawns_list = d_pawns | array.concat pawn.Map.mapPawns.AllHumanlikeSpawned ~}}
+{{~ # ■生存中の自派閥全ポーン（メカ、家畜含め） ~}}
+{{~ player_faction_pawns = [] ~}}
+{{~ for pf_pawn in PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_OfPlayerFaction ~}}
+{{~ player_faction_pawns = player_faction_pawns | array.add pf_pawn.name ~}}
+{{~ end ~}}
+{{~ # ■マップ内の全ポーン+全世界の死亡ポーン ~}}
+{{~ all_pawns_list = d_pawns | array.concat pawn.Map.mapPawns.AllPawns ~}}
+{{~ # ■プレイヤー派閥名 ~}}
+{{~ player_faction_name = Find.FactionManager.OfPlayer.Name ~}}
 {{~ # ★周囲に敵対派閥がいるかどうか ~}}
 {{~ if pawn.map.dangerWatcher.DangerRating | string.contains "High" ~}}
 周囲に要対応の敵対勢力が存在し、戦闘が起きている、または臨戦態勢です
@@ -77,7 +87,8 @@
 周囲に敵対勢力が存在し警戒中、または戦闘状態です
 {{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
-{{ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor}}{{~ if map_temp >= 40 || map_temp <= -15~}}
+{{~ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor ~}}
+{{~ if map_temp >= 40 || map_temp <= -15~}}
 外気温は{{ map_temp }}Cです
 {{~ end ~}}
 {{~ # ★辞書を使い天気、空間を描写 ~}}
@@ -89,24 +100,47 @@
 {{~ # ★ポーン取得ループ開始 ~}}
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
-
-{{~ p.name ~}}:{{~ if p.gender | string.contains "Male" ~}}男性{{~ else ~}}女性{{~ end }} {{ p.age ~}}歳
-{{~ # ★所持武器名称取得、狩りや戦闘時のみ武器名を表示 ~}}
+{{~ # ■ポーン情報整理■ ~}}
+{{~ # ■ポーン派閥名 ~}}
+{{~ pawn_faciton_name = p.Faction.Name ~}}
+{{~ # ■ポーンがプレイヤー派閥かどうか ~}}
+{{~ is_player_pawn = p.Faction.IsPlayer ?? false ~}}
+{{~ # ■ポーンが同盟派閥かどうか ~}}
+{{~ if is_player_pawn == false ~}}
+{{~ is_ally_pawn = p.Faction.PlayerRelationKind == "Ally" ~}}
+{{~ # ■ポーンが敵対派閥かどうか ~}}
+{{~ is_hostile_pawn = p.Faction.PlayerRelationKind == "Hostile" ~}}
+{{~ end ~}}
+{{~ # ■fullthoughtが安全に使用出来るかフラグ ~}}
+{{~ can_use_fullthought = false ~}}
+{{~ # ■「 ,」のような空文字列がthoughtsにあるとfullthoughtが取れない？のでフラグ作成 ~}}
+{{~ thoughts_list = p.thoughts | string.replace "Memory: " "" | string.split "," ~}}
+{{~ has_empty = false ~}}
+{{~ for t in thoughts_list ~}}
+{{~ if (t | string.strip) == "" ~}}
+{{~ has_empty = true ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ if has_empty == false ~}}
+{{~ can_use_fullthought = true ~}}
+{{~ end ~}}
+{{~ # ■所持武器名称取得、狩りや戦闘時のみ武器名を表示 ~}}
 {{~ weapon = "" ~}}
 {{~ if p.equipment | string.contains "Weapon:" ~}}
 {{~ weapon = p.equipment | string.split "Weapon: " | array.last | string.split ", Apparel:" | array.first | string.strip ~}}
 {{~ end ~}}
+
+{{~ # ★ポーン名 ~}}
+{{ p.name }}:{{ if p.gender | string.contains "Male" }}男性{{ else }}女性{{ end }} {{ p.age }}歳
 {{~ # ★派閥によって台詞を調整 ~}}
-{{~ if p.kindDef.defName == "Beggar"~}}
-乞食として{{ Find.FactionManager.OfPlayer.Name }}の人間に対し物乞いをしています
-{{~ else if p.Faction.IsPlayer && p.Faction.hasname ~}}
+{{~ if is_player_pawn && p.Faction.hasname ~}}
 所属派閥:{{ p.Faction.Name }}
-{{~ else if p.Faction.IsPlayer ~}}
+{{~ else if is_player_pawn ~}}
 生活の基盤を整えている途中です
-{{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill < -80 ~}}
+{{~ else if is_hostile_pawn ~}}
 敵対派閥{{ p.Faction.Name }}の人間です
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し挑発的な言葉を投げかけます
-{{~ else if !(p.Faction.isPlayer) && p.Faction.PlayerGoodwill > 80 ~}}
+{{~ else if is_ally_pawn == "Ally" ~}}
 同盟派閥{{ p.Faction.Name }}の人間です
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し友好的な言葉を投げかけます
 {{~ else ~}}
@@ -140,7 +174,8 @@
 {{~ formatted_traits = formatted_traits | string.replace ability_condition.key ability_condition.value ~}}
 {{~ end ~}}
 {{ formatted_traits }}
-{{~ # ★10以上のスキルのみを取得し何が得意かを表示 ~}}
+{{~ # ★10以上のスキルのみを取得し何が得意かを表示（入植者のみ） ~}}
+{{~ if is_player_pawn ~}}
 {{~ skill_names = [] ~}}
 {{~ for item in (p.skills | string.replace "Skills: " "" | string.split ", ") ~}}
 {{~ parts = item | string.split ": " ~}}
@@ -153,25 +188,30 @@
 {{~ if skill_names | array.size > 0 ~}}
 {{ skill_names | array.join "、" }}スキルを使う作業が得意です
 {{~ end ~}}
+{{~ end ~}}
+{{~ # ★辞書を使い欲求を描写（入植者のみ） ~}}
+{{~ if can_use_fullthought == true ~}}
+{{~ if is_player_pawn ~}}
 {{~ # ★辞書を使い欲求を描写 ~}}
 {{~ for thought_condition in thought_conditions ~}}
 {{~ if p.fullthought | string.contains thought_condition.key ~}}
 {{ thought_condition.value }}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★身近な人や動物の死を描写 結構ノイズになる可能性あり、不要なら■■■部分まで削除~}}
+{{~ # ★身近な人や動物の死を描写 ~}}
 {{~ clean_thought = p.fullthought | string.replace "Thoughts: " "" ~}}
 {{~ for thought_line in (clean_thought | string.split ", ") ~}}
 {{~ if (thought_line | string.contains "が死んだ") && !(thought_line | string.contains "ライバル") && !(thought_line | string.contains "入植者") ~}}
 {{ thought_line | string.split "(" | array.first | string.strip | string.replace "私の" "" | string.replace "が死んだ" "が死んで悲しんでいます" }}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ■■■不要であればここまでを削除~}}
-{{~ # ★辞書を使い怪我、病気を描写（痛みが強い時のみ描写） ~}}
+{{~ # ★辞書を使い怪我、病気を描写（痛みが強い時のみ） ~}}
 {{~ if (p.fullthought | string.contains "深刻な痛み") || (p.fullthought | string.contains "激しい痛み") || (p.fullthought | string.contains "気が遠くなる痛み") ~}}
 {{~ for health_condition in health_conditions ~}}
 {{~ if p.health | string.contains health_condition.key ~}}
 {{ health_condition.value }}
+{{~ end ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -208,14 +248,14 @@
 コロニー外で遠征活動中です
 {{~ end ~}}
 {{~ # ★現在マップは誰の領地か ~}}
-{{~ if Find.FactionManager.OfPlayer.hasname && p.Map.Parent.Faction.name != Find.FactionManager.OfPlayer.name ~}}
-{{~ if p.Map.Parent.Faction.PlayerGoodwill < -80 ~}}
-{{~ if p.Faction.Name == Find.FactionManager.OfPlayer.name ~}}
+{{~ if pawn_faciton_name == Find.FactionManager.OfPlayer.name ~}}
+{{~ if p.Map.Parent.Faction.name != Find.FactionManager.OfPlayer.name ~}}
+{{~ if p.Map.Parent.Faction.PlayerRelationKind == "Hostile" ~}}
 敵対勢力{{ p.Map.Parent.Faction.Name }}の領地にいます
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★ポーンは今何をしているか、精神崩壊、戦闘中等で分岐処理、膨大かつ英語の場合もあるので注意 ~}}
+{{~ # ★ポーンは今何をしているか、精神崩壊、戦闘中等で分岐処理、膨大かつp.jobが英語の場合もあるので注意 ~}}
 {{~ formatted_job =  p.job | string.replace "(traveling to)" "" ~}}
 {{~ # ★遺体に関する作業の場合は人か動物かを明確にする ~}}
 {{~ if formatted_job | string.contains "(死亡)を" ~}}
@@ -249,7 +289,7 @@
 {{ weapon }}で{{ formatted_job }}
 {{~ else if formatted_job | string.contains "(死亡)を摂っている" ~}}
 {{~ if is_human_dead ~}}
-他に食べるものがなく、{{ dead_name }}という名を持つ人間の死体をそのまま食べている
+他に食べるものがなく、おそろしいものを食べてしまった
 {{~ else ~}}
 他に食べるものがなく、{{ dead_name }}の死体をそのまま食べている
 {{~ end ~}}
@@ -260,17 +300,17 @@
 {{ dead_name }}の死体{{ after_dead }}
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "うろうろしている" ~}}
-{{~ if p.Faction.IsPlayer ~}}
+{{~ if is_player_faction ~}}
 次にやることを探している
 {{~ else if p.kindDef.defName == "Beggar" ~}}
-自らの境遇で同情を誘い、{{ Find.FactionManager.OfPlayer.Name }}の人間に対して物乞いをしています
+自らの境遇で同情を誘い、{{ player_faction_name }}の人間に対して物乞いをしています
 {{~ else if p.Faction.def.defName == "Enpire" ~}}
-自分達の帝国領との差を誇示しながら、{{ Find.FactionManager.OfPlayer.Name }}の拠点を品定めしています
+自分達の帝国領との差を誇示しながら、{{ player_faction_name }}の拠点を品定めしています
 {{~ end ~}}
 {{~ else ~}}
 {{ formatted_job }}
 {{~ end ~}}
-{{~ # ★付近のポーン情報 ~}}
+{{~ # ★会話中のポーンとの関係 ~}}
 {{~ #自分以外のpawns ~}}
 {{~ other_pawns = [] ~}}
 {{~ for other in pawns ~}}
@@ -292,22 +332,87 @@
 {{~ #★各ポーンのジョブに外部ポーン名が含まれていた場合検知 ~}}
 {{~ for job in all_jobs ~}}
 {{~ target_pawn = "" ~}}
-{{~ for one_pawn in pawns_list ~}}
+{{~ for one_pawn in all_pawns_list ~}}
 {{~ if job | string.contains one_pawn.name ~}}
 {{~ target_pawn = one_pawn ~}}
+{{~ already_exists = pawn_name_history | array.contains target_pawn.name ~}}
+{{~ if !already_exists ~}}
+{{~ pawn_name_history = pawn_name_history | array.add target_pawn.name ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ if target_pawn != "" ~}}
+{{~ if !already_exists ~}}
+{{~ # 対象ポーンが派閥を持っているか（独自プロパティ参照） ~}}
+{{~ if target_pawn.faction != "" ~}}
 {{~ if target_pawn.RaceProps.Humanlike ~}}
 {{~ if target_pawn.Faction.isPlayer ~}}
-{{ target_pawn }}は自派閥の人間です
-{{~ else if target_pawn.Faction.PlayerGoodwill <= -80 ~}}
-{{ target_pawn }}は敵対派閥{{ target_pawn.Faction }}所属の人間です
-{{~ else if target_pawn.Faction.PlayerGoodwill >= 80 ~}}
-{{ target_pawn }}は同盟派閥{{ target_pawn.Faction }}所属の人間です
+{{ target_pawn.name }}は自派閥の人名です
+{{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
+{{ target_pawn.name }}は敵対派閥{{ target_pawn.Faction }}所属の人名
+{{~ else if target_pawn.Faction.PlayerRelationKind == "Ally" ~}}
+{{ target_pawn.name }}は同盟派閥{{ target_pawn.Faction }}所属の人名
 {{~ else ~}}
-{{ target_pawn }}は別派閥{{ target_pawn.Faction }}所属の人間です
+{{ target_pawn.name }}は別派閥{{ target_pawn.Faction }}所属の人名
 {{~ end ~}}
+{{~ else if target_pawn.RaceProps.Animal ~}}
+{{~ if target_pawn.Faction.isPlayer ~}}
+{{ target_pawn.name }}は一緒に暮らしている生き物です
+{{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
+{{ target_pawn.name }}は敵対的な生き物です
+{{~ end ~}}
+{{~ else if target_pawn.RaceProps.IsMechanoid ~}}
+{{~ if target_pawn.Faction.isPlayer ~}}
+{{ target_pawn.name }}は{{ player_faction_name }}で使役しているメカノイドです
+{{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
+{{ target_pawn.name }}は敵対的なメカノイドです
+{{~ end ~}}
+{{~ else if target_pawn.RaceProps.IsAnomalyEntity ~}}
+{{~ if target_pawn.Faction.isPlayer ~}}
+{{ target_pawn.name }}は{{ player_faction_name }}で使役している異形です
+{{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
+{{ target_pawn.name }}は敵対的な異形生命体です
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+
+{{~ # ★戦闘中かどうか ~}}
+{{~ if prompt | string.contains "urgent tone" ~}}
+戦闘中で余裕がない状態です
+{{~ end ~}}
+{{~ # ★インシデント発生時、大量の分岐が必要かも ~}}
+{{ if prompt | string.contains "Talk about incident"~}}
+{{~ incident = prompt | string.split "[" | array.last | string.split "]" | array.first ~}}
+{{~ if incident | string.contains "友人や家族が" ~}}
+{{~ dead_incident = incident | string.split "." | array.first ~}}
+以下の要因で仲間が死んでしまったことについて言及しているようです
+{{ dead_incident }}
+{{~ else ~}}
+以下の出来事について話しているようです"{{ incident }}"
+{{~ end ~}}
+{{~ # ★精神崩壊時 ~}}
+{{~ else if prompt | string.contains "mental break" ~}}
+{{~ if pawns.Count == 1 ~}}
+{{ pawn }}は精神を病み、一人で思案しながら独り言を言っています
+{{ pawn }}の精神状態から生み出されるシーンを描写してください
+{{~ else ~}}
+{{ pawn }}の精神状態から生み出されるシーンを描写してください
+{{~ end ~}}
+{{~ # ★通常時 ~}}
+{{~ else if prompt | string.contains "short monologue" ~}}
+{{ pawn }}は一人で思案しながら独り言を言っているようです
+{{~ else if prompt | string.contains "starts conversation" ~}}
+{{ pawn }}達は会話をしているようです
+{{~ end ~}}
+{{~ # ★家族情報取得 ~}}
+{{~ for p in pawns ~}}
+{{~ if p.RaceProps.Humanlike ~}}
+{{~ for f_name in p.relations.RelatedPawns ~}}
+{{~ if incident | string.contains f_name ~}}
+{{ f_name }}は{{ p.name }}の家族です
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
