@@ -12,7 +12,7 @@
     "吹雪": "屋外では吹雪が吹き荒れています",
     "毒雨": "屋外では有毒な雨が降っています",
     "盲目の霧": "屋外は濃い霧に包まれています",
-    "死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません"
+    "死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません",
 } ~}}
 {{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力 ~}}
 {{~ thought_conditions = {
@@ -33,8 +33,7 @@
     "刺し傷": "刺し傷により苦しんでいます",
     "切創": "切創により苦しんでいます",
     "噛み傷": "噛み傷により苦しんでいます",
-    "凍傷":"凍傷で苦しんでいます"
-,
+    "凍傷":"凍傷で苦しんでいます",
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みに関係なく常に表示） ~}}
 {{~ status_conditions = {
@@ -43,11 +42,18 @@
     "スカリア感染": "放置すると凶暴化する可能性があるスカリアという細菌に感染しています",
     "ゴージュースによる興奮": "ゴージュースという戦闘用に開発された薬物を飲み興奮状態です",
 } ~}}
+{{~ # ▼戦闘時のみ表示したい健康情報、keyが健康タブにある場合valueを出力（痛みに関係なく常に表示） ~}}
+{{~ battle_status_conditions = {
+    "強化視覚センサー": "高性能な視覚センサーを備えています",
+    "制御不能な触手": "種族特有の触手が体から生えています",
+    "再生": "種族特有の自己再生能力があります",
+} ~}}
 {{~ # ▼置換、非表示にしたい特性情報、keyが特性欄にある場合、valueに置換する ~}}
 {{~ ability_conditions = {
     "よたか": "夜に活動するのが好き",
     "歓喜": "みんなに愛される存在",
     "苦悩する芸術家": "独特な芸術観",
+    "ドラッグ常用者": "",
 } ~}}
 {{~ # ▼心情用辞書 ~}}
 {{~ mood_map = {
@@ -56,14 +62,14 @@
     "普通": "精神状態は安定しています",
     "ストレス気味": "ほんの少し現状に不満があるようです",
     "不安": "ストレスを抱えているようです",
-    "崩壊寸前": "精神状態は限界に達しており崩壊寸前です"
+    "崩壊寸前": "精神状態は限界に達しており崩壊寸前です",
 } ~}}
 {{~ # ■世界情報整理■ ~}}
 {{~ # ■ジョブ格納用配列 ~}}
 {{~ all_jobs = [] ~}}
 {{~ # ■話題ポーン格納用配列 ~}}
 {{~ pawn_name_history = [] ~}}
-{{~ # ■全世界の死亡ポーン ~}}
+{{~ # ■全世界の死亡ポーン、処理が重いのは7割これのせい ~}}
 {{~ all_pawns = PawnsFinder.All_AliveOrDead ~}}
 {{~ d_pawns = [] ~}}
 {{~ for all_pawn in all_pawns ~}}
@@ -88,8 +94,9 @@
 {{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{~ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor ~}}
-{{~ if map_temp >= 40 || map_temp <= -15~}}
-外気温は{{ map_temp }}Cです
+{{~ if map_temp <= -74 ~}}
+{{~ else if map_temp >= 40 || map_temp <= -15~}}
+外気温:{{ map_temp }}C
 {{~ end ~}}
 {{~ # ★辞書を使い天気、空間を描写 ~}}
 {{~ for weather in weather_map ~}}
@@ -106,11 +113,9 @@
 {{~ # ■ポーンがプレイヤー派閥かどうか ~}}
 {{~ is_player_pawn = p.Faction.IsPlayer ?? false ~}}
 {{~ # ■ポーンが同盟派閥かどうか ~}}
-{{~ if is_player_pawn == false ~}}
-{{~ is_ally_pawn = p.Faction.PlayerRelationKind == "Ally" ~}}
+{{~ is_ally_pawn = !is_player_pawn && p.Faction.PlayerRelationKind == "Ally" ~}}
 {{~ # ■ポーンが敵対派閥かどうか ~}}
-{{~ is_hostile_pawn = p.Faction.PlayerRelationKind == "Hostile" ~}}
-{{~ end ~}}
+{{~ is_hostile_pawn = !is_player_pawn && p.Faction.PlayerRelationKind == "Hostile" ~}}
 {{~ # ■fullthoughtが安全に使用出来るかフラグ ~}}
 {{~ can_use_fullthought = false ~}}
 {{~ if p.thoughts != null ~}}
@@ -136,6 +141,18 @@
 
 {{~ # ★ポーン名 ~}}
 {{ p.name }}:{{ if p.gender | string.contains "Male" }}男性{{ else }}女性{{ end }} {{ p.age }}歳
+{{~ # ★役割 ~}}
+{{~ role_map = {
+    "Prisoner": "このキャラクターは捕虜として生活しています",
+    "Slave": "このキャラクターは奴隷として働かされています"
+} ~}}
+{{~ for role in role_map ~}}
+{{~ if p.role | string.contains role.key ~}}
+{{ role.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ★設定されたペルソナ ~}}
+個性:{{ p.personality }}
 {{~ # ★派閥によって台詞を調整 ~}}
 {{~ if is_player_pawn && p.Faction.hasname ~}}
 所属派閥:{{ p.Faction.Name }}
@@ -150,36 +167,15 @@
 {{~ else ~}}
 別派閥{{ p.Faction.Name }}の人間です
 {{~ end ~}}
-{{~ # ★自分で設定したペルソナ ~}}
-{{ p.personality }}
-{{~ # ★役割 ~}}
-{{~ role_map = {
-    "Prisoner": "このキャラクターは捕虜として生活しています",
-    "Slave": "このキャラクターは奴隷として働かされています"
-} ~}}
-{{~ for role in role_map ~}}
-{{~ if p.role | string.contains role.key ~}}
-{{ role.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★現在の心情 ~}}
-{{~ for mood in mood_map ~}}
-{{~ if p.mood | string.contains mood.key ~}}
-{{ mood.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★赤ちゃんチェック ~}}
-{{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
-この子は幼く「あう～」のような赤ちゃん言葉でしか話せません
-{{~ end ~}}
 {{~ # ★辞書を使い才能・性格を整形し表示 ~}}
 {{~ formatted_traits = p.traits | string.replace "Traits: " "特性:" ~}}
 {{~ for ability_condition in ability_conditions ~}}
 {{~ formatted_traits = formatted_traits | string.replace ability_condition.key ability_condition.value ~}}
 {{~ end ~}}
 {{ formatted_traits }}
-{{~ # ★10以上のスキルのみを取得し何が得意かを表示（入植者のみ） ~}}
+{{~ # ★入植者だけに走らせる処理★ ~}}
 {{~ if is_player_pawn ~}}
+{{~ # ★10以上のスキルのみを取得し何が得意かを表示（入植者のみ） ~}}
 {{~ skill_names = [] ~}}
 {{~ for item in (p.skills | string.replace "Skills: " "" | string.split ", ") ~}}
 {{~ parts = item | string.split ": " ~}}
@@ -190,13 +186,18 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ if skill_names | array.size > 0 ~}}
-{{ skill_names | array.join "、" }}スキルを使う作業が得意です
+得意スキル:{{ skill_names | array.join "、" }}
+{{~ end ~}}
+{{~ # ★現在の心情 ~}}
+{{~ for mood in mood_map ~}}
+{{~ if p.mood | string.contains mood.key ~}}
+心情:{{ mood.value }}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★辞書を使い欲求を描写（入植者のみ） ~}}
+
+{{~ # ★fullthought使えるかチェック ~}}
 {{~ if can_use_fullthought == true ~}}
-{{~ if is_player_pawn ~}}
-{{~ # ★辞書を使い欲求を描写 ~}}
+{{~ # ★辞書を使い欲求を描写（入植者のみ） ~}}
 {{~ for thought_condition in thought_conditions ~}}
 {{~ if p.fullthought | string.contains thought_condition.key ~}}
 {{ thought_condition.value }}
@@ -218,22 +219,24 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
+{{~ # ★赤ちゃんチェック ~}}
+{{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
+この子は幼く「あう～」のような赤ちゃん言葉でしか話せません
 {{~ end ~}}
+{{~ end ~}}
+{{~ # ★ここまで★ ~}}
 {{~ # ★辞書を使い常に表示したい健康状態を描写 ~}}
 {{~ for status_condition in status_conditions ~}}
 {{~ if p.health | string.contains status_condition.key ~}}
 {{ status_condition.value }}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★立てるかチェック ~}}
-{{~ if p.Downed ~}}
-自力で立つことが出来ません
-{{~ end ~}}
+
 {{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
 {{~ if p.location | string.contains "外気温" && p.map.weather | string.contains "軌道上" ~}}
-宇宙空間で活動中です
+現在地:宇宙空間
 {{~ else if p.location | string.contains "外気温" ~}}
-屋外にいます
+現在地:屋外
 {{~ else ~}}
 {{~ if !(p.location | string.contains "未定") ~}}
 {{~ if map_temp == -75 ~}}
@@ -241,11 +244,15 @@
 {{~ else ~}}
 {{~ for weather in weather_map ~}}
 {{~ if p.location | string.contains weather.key ~}}
-{{ p.location }}にいます
+現在地:{{ p.location }}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
+{{~ end ~}}
+{{~ # ★立てるかチェック ~}}
+{{~ if p.Downed ~}}
+自力で立つことが出来ません
 {{~ end ~}}
 {{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
 {{~ if p.Map.IsPlayerHome == false ~}}
@@ -385,7 +392,7 @@
 
 {{~ # ★戦闘中かどうか ~}}
 {{~ if prompt | string.contains "urgent tone" ~}}
-戦闘中で余裕がない状態です
+戦闘中です
 {{~ end ~}}
 {{~ # ★インシデント発生時、大量の分岐が必要かも ~}}
 {{ if prompt | string.contains "Talk about incident"~}}
