@@ -54,16 +54,16 @@
 {{~ other_pawns_name = other_pawns | array.join "、" ~}}
 {{~ combat_pawns_name = combat_pawns | array.join "、" ~}}
 {{~ if player_pawns_name != "" ~}}
-{{~ p_text = "、プレイヤー派閥のメンバー"+ player_pawns_name + ""~}}
+{{~ p_text = "、プレイヤー派閥のメンバー【"+ player_pawns_name + "】"~}}
 {{~ end ~}}
 {{~ if hostile_pawns_name != "" ~}}
-{{~ h_text = "、敵対派閥のメンバー（NPC）"+ hostile_pawns_name + ""~}}
+{{~ h_text = "、敵対派閥のメンバー（NPC）【"+ hostile_pawns_name + "】"~}}
 {{~ end ~}}
 {{~ if ally_pawns_name != "" ~}}
-{{~ a_text = "、同盟派閥のメンバー（NPC）"+ ally_pawns_name + ""~}}
+{{~ a_text = "、同盟派閥のメンバー（NPC）【"+ ally_pawns_name + "】"~}}
 {{~ end ~}}
 {{~ if other_pawns_name != "" ~}}
-{{~ o_text = "、中立派閥のメンバー（NPC）"+ other_pawns_name + ""~}}
+{{~ o_text = "、中立派閥のメンバー（NPC）【"+ other_pawns_name + "】"~}}
 {{~ end ~}}
 {{~ if danger_flag == true ~}}
 {{~ if combat_pawns_name != "" ~}}
@@ -74,9 +74,11 @@
 あなたはRimworldにおける架空キャラのロールプレイAIです。以下に提供される
 情報を背景とし{{ p_text }}{{ h_text }}{{ a_text }}{{ o_text }}の会話を生成してください。
 {{ combat_text }}
-{{~ # ▼自派閥の目標設定（自派閥にのみ適応したい設定があれば） ~}}
-{{~ if Find.FactionManager.OfPlayer.HasName ~}}
-派閥:{{ Find.FactionManager.OfPlayer }}の目標は生きてこの星を脱出すること
+{{~ # ▼自派閥の目標設定（たまに出力して常時この話をしないように） ~}}
+{{~ if (Find.TickManager.TicksGame % 10) == 0 && Find.FactionManager.OfPlayer.HasName ~}}
+{{~ if player_pawns_name != "" ~}}
+派閥:{{ Find.FactionManager.OfPlayer }}の目的は宇宙船ノアを改造しながら惑星調査を行うことです
+{{~ end ~}}
 {{~ end ~}}
 ルール:
 台詞は200文字程度、日本語のみ、1人あたり1~2台詞
