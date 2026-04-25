@@ -1,0 +1,83 @@
+{{~ # ▼Base Instructionのサンプル ~}}
+{{~ player_pawns = [] ~}}
+{{~ hostile_pawns = [] ~}}
+{{~ ally_pawns = [] ~}}
+{{~ other_pawns = [] ~}}
+{{~ # ■初期化 ~}}
+{{~ p_faction = Find.FactionManager.OfPlayer.Name ~}}
+{{~ h_faction = "" ~}}
+{{~ a_faction = "" ~}}
+{{~ o_faction = "" ~}}
+{{~ # ■周囲に敵対派閥がいるかどうか ~}}
+{{~ danger_flag = false ~}}
+{{~ if pawn.map.dangerWatcher.DangerRating | string.contains "High" || pawn.map.dangerWatcher.DangerRating | string.contains "Low" ~}}
+{{~ danger_flag = true ~}}
+{{~ end ~}}
+{{~ # ▼ポーンループ ~}}
+{{~ for p in pawns ~}}
+{{~ if p.RaceProps.Humanlike ~}}
+{{~ if p.Faction.IsPlayer ~}}
+{{~ # ▼攻撃、被弾時刻取得 ~}}
+{{~ latest_tick = 99999 ~}}
+{{~ if p.mindState.lastRangedHarmTick != 0 ~}}
+{{~ latest_tick = p.mindState.lastRangedHarmTick ~}}
+{{~ end ~}}
+{{~ if p.mindState.lastMeleeThreatHarmTick != 0 ~}}
+{{~ if latest_tick > p.mindState.lastRangedHarmTick ~}}
+{{~ latest_tick = p.mindState.lastRangedHarmTick ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ▼ゲーム内で1時間以内に攻撃被弾していた場合 ~}}
+{{~ if latest_tick != 99999 ~}}
+{{~ last_attack_tick = Find.tickmanager.ticksgame - p.mindState.lastAttackTargetTick ~}}
+{{~ last_harm_tick = Find.tickmanager.ticksgame - latest_tick ~}}
+{{~ if  last_attack_tick < 2500 || last_harm_tick < 2500 ~}}
+{{~ combat_pawns = combat_pawns | array.add p.name ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ player_pawns = player_pawns | array.add p.name ~}}
+{{~ else if p.Faction.PlayerRelationKind == "Hostile" ~}}
+{{~ hostile_pawns = hostile_pawns | array.add p.name ~}}
+{{~ h_faction = p.Faction.Name ~}}
+{{~ else if p.Faction.PlayerRelationKind == "Ally" ~}}
+{{~ ally_pawns = ally_pawns | array.add p.name ~}}
+{{~ a_faction = p.Faction.Name ~}}
+{{~ else ~}}
+{{~ other_pawns = other_pawns | array.add p.name ~}}
+{{~ o_faction = p.Faction.Name ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ player_pawns_name = player_pawns | array.join "、" ~}}
+{{~ hostile_pawns_name = hostile_pawns | array.join "、" ~}}
+{{~ ally_pawns_name = ally_pawns | array.join "、" ~}}
+{{~ other_pawns_name = other_pawns | array.join "、" ~}}
+{{~ combat_pawns_name = combat_pawns | array.join "、" ~}}
+{{~ if player_pawns_name != "" ~}}
+{{~ p_text = "、プレイヤー派閥のメンバー"+ player_pawns_name + ""~}}
+{{~ end ~}}
+{{~ if hostile_pawns_name != "" ~}}
+{{~ h_text = "、敵対派閥のメンバー（NPC）"+ hostile_pawns_name + ""~}}
+{{~ end ~}}
+{{~ if ally_pawns_name != "" ~}}
+{{~ a_text = "、同盟派閥のメンバー（NPC）"+ ally_pawns_name + ""~}}
+{{~ end ~}}
+{{~ if other_pawns_name != "" ~}}
+{{~ o_text = "、中立派閥のメンバー（NPC）"+ other_pawns_name + ""~}}
+{{~ end ~}}
+{{~ if danger_flag == true ~}}
+{{~ if combat_pawns_name != "" ~}}
+{{~ combat_text =  combat_pawns_name + "は現在戦闘中です！" ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ▼結合後プロンプト ~}}
+あなたはRimworldにおける架空キャラのロールプレイAIです。以下に提供される
+情報を背景とし{{ p_text }}{{ h_text }}{{ a_text }}{{ o_text }}の会話を生成してください。
+{{ combat_text }}
+{{~ # ▼自派閥の目標設定（自派閥にのみ適応したい設定があれば） ~}}
+{{~ if Find.FactionManager.OfPlayer.HasName ~}}
+派閥:{{ Find.FactionManager.OfPlayer }}の目標は生きてこの星を脱出すること
+{{~ end ~}}
+ルール:
+台詞は200文字程度、日本語のみ、1人あたり1~2台詞
+年齢、性別によって口調を調整する
