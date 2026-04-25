@@ -64,9 +64,40 @@
     "不安": "ストレスを抱えているようです",
     "崩壊寸前": "精神状態は限界に達しており崩壊寸前です",
 } ~}}
+{{~ # ▼表示したい外部ポーン情報、keyがloadjobにある場合valueを出力 ~}}
+{{~ load_name = {
+    "BegForItems": "慈悲を求める乞食達が訪れています",
+    "TradeWithColony": "近くにトレーダーが訪れています",
+    "StageThenAttack": "敵対派閥が襲撃準備をしています",
+    "AssaultColony": "敵対派閥が襲撃を行っています！",
+    "AssistColony": "同盟派閥の援軍が助けに来ています",
+    "VisitColony": "訪問者が訪れています",
+    "SleepThenMechanoidsDefend": "敵対的なメカノイドが近くにいます",
+    "MechanoidsDefend": "敵対的なメカノイドが近くにいます",
+    "CreepJoiner": "怪しい雰囲気の人間が来ています",
+} ~}}
+{{~ # ▼表示したい外部ポーン情報、keyがCurLordToilにある場合valueを出力 ~}}
+{{~ toil_name = {
+    "Breaching": "建物を全て破壊するつもりのようです",
+    "Sappers": "壁を破壊し侵入経路を作るつもりのようです",
+    "StageThenAttack": "敵対派閥が襲撃準備を",
+    "AssaultColony": "攻撃されています！",
+} ~}}
+{{~ # ▼補足情報辞書、keyが話題、ジョブ、インシデント内に含まれている場合、補足情報としてvalueを出力 ~}}
+{{~ tips_map = {
+    "サイトスティーラー": "サイトスティーラーは姿を消せる異形生命体です",
+} ~}}
 {{~ # ■世界情報整理■ ~}}
+{{~ # ■インシデント格納用文字列 ~}}
+{{~ incident = "" ~}}
+{{~ if prompt | string.contains "Talk about incident"~}}
+{{~ incident = prompt | string.split "[" | array.last | string.split "]" | array.first ~}}
+{{~ end ~}}
 {{~ # ■ジョブ格納用配列 ~}}
-{{~ all_jobs = [] ~}}
+{{~ all_jobs_and_incident = [] ~}}
+{{~ if incident != "" ~}}
+{{~ all_jobs_and_incident = all_jobs_and_incident | array.add incident ~}}
+{{~ end ~}}
 {{~ # ■話題ポーン格納用配列 ~}}
 {{~ pawn_name_history = [] ~}}
 {{~ # ■全世界の死亡ポーン、処理が重いのは7割これのせい ~}}
@@ -86,12 +117,6 @@
 {{~ all_pawns_list = d_pawns | array.concat pawn.Map.mapPawns.AllPawns ~}}
 {{~ # ■プレイヤー派閥名 ~}}
 {{~ player_faction_name = Find.FactionManager.OfPlayer.Name ~}}
-{{~ # ★周囲に敵対派閥がいるかどうか ~}}
-{{~ if pawn.map.dangerWatcher.DangerRating | string.contains "High" ~}}
-周囲に要対応の敵対勢力が存在し、戦闘が起きている、または臨戦態勢です
-{{~ else if pawn.map.dangerWatcher.DangerRating | string.contains "Low" ~}}
-周囲に敵対勢力が存在し警戒中、または戦闘状態です
-{{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{~ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor ~}}
 {{~ if map_temp <= -74 ~}}
@@ -155,17 +180,17 @@
 個性:{{ p.personality }}
 {{~ # ★派閥によって台詞を調整 ~}}
 {{~ if is_player_pawn && p.Faction.hasname ~}}
-所属派閥:{{ p.Faction.Name }}
+派閥:{{ p.Faction.Name }}
 {{~ else if is_player_pawn ~}}
 生活の基盤を整えている途中です
 {{~ else if is_hostile_pawn ~}}
-敵対派閥{{ p.Faction.Name }}の人間です
+派閥:{{ p.Faction.Name }}（敵対）
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し挑発的な言葉を投げかけます
 {{~ else if is_ally_pawn == "Ally" ~}}
-同盟派閥{{ p.Faction.Name }}の人間です
+派閥:{{ p.Faction.Name }}（同盟）
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し友好的な言葉を投げかけます
 {{~ else ~}}
-別派閥{{ p.Faction.Name }}の人間です
+派閥:{{ p.Faction.Name }}（中立）
 {{~ end ~}}
 {{~ # ★辞書を使い才能・性格を整形し表示 ~}}
 {{~ formatted_traits = p.traits | string.replace "Traits: " "特性:" ~}}
@@ -194,7 +219,6 @@
 心情:{{ mood.value }}
 {{~ end ~}}
 {{~ end ~}}
-
 {{~ # ★fullthought使えるかチェック ~}}
 {{~ if can_use_fullthought == true ~}}
 {{~ # ★辞書を使い欲求を描写（入植者のみ） ~}}
@@ -231,7 +255,6 @@
 {{ status_condition.value }}
 {{~ end ~}}
 {{~ end ~}}
-
 {{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
 {{~ if p.location | string.contains "外気温" && p.map.weather | string.contains "軌道上" ~}}
 現在地:宇宙空間
@@ -286,40 +309,40 @@
 {{ formatted_job }}
 {{~ else if formatted_job | string.contains "Attacking" ~}}
 {{~ if weapon != "" ~}}
-{{ weapon }}で{{ p.TargetCurrentlyAimingAt.Label }}を攻撃中です
+現在の行動:{{ weapon }}で{{ p.TargetCurrentlyAimingAt.Label }}を攻撃中です
 {{~ else ~}}
-素手で{{ p.TargetCurrentlyAimingAt.Label }}を攻撃中です
+現在の行動:素手で{{ p.TargetCurrentlyAimingAt.Label }}を攻撃中です
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "攻撃中"~}}
 {{~ if weapon != "" ~}}
-{{ weapon }}で{{ formatted_job }}
+現在の行動:{{ weapon }}で{{ formatted_job }}
 {{~ else ~}}
-素手で{{ formatted_job }}
+現在の行動:素手で{{ formatted_job }}
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "狩っている" ~}}
-{{ weapon }}で{{ formatted_job }}
+現在の行動:{{ weapon }}で{{ formatted_job }}
 {{~ else if formatted_job | string.contains "(死亡)を摂っている" ~}}
 {{~ if is_human_dead ~}}
-他に食べるものがなく、おそろしいものを食べてしまった
+現在の行動:他に食べるものがなく、おそろしいものを食べてしまった
 {{~ else ~}}
-他に食べるものがなく、{{ dead_name }}の死体をそのまま食べている
+現在の行動:他に食べるものがなく、{{ dead_name }}の死体をそのまま食べている
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "(死亡)" ~}}
 {{~ if is_human_dead ~}}
-{{ dead_name }}という名を持つ人間の死体{{ after_dead }}
+現在の行動:{{ dead_name }}という名を持つ人間の死体{{ after_dead }}
 {{~ else ~}}
-{{ dead_name }}の死体{{ after_dead }}
+現在の行動:{{ dead_name }}の死体{{ after_dead }}
 {{~ end ~}}
 {{~ else if formatted_job | string.contains "うろうろしている" ~}}
-{{~ if is_player_faction ~}}
-次にやることを探している
+{{~ if is_player_pawn ~}}
+現在の行動:次にやることを探している
 {{~ else if p.kindDef.defName == "Beggar" ~}}
-自らの境遇で同情を誘い、{{ player_faction_name }}の人間に対して物乞いをしています
+現在の行動:自らの境遇で同情を誘い、{{ player_faction_name }}の人間に対して物乞いをしています
 {{~ else if p.Faction.def.defName == "Enpire" ~}}
-自分達の帝国領との差を誇示しながら、{{ player_faction_name }}の拠点を品定めしています
+現在の行動:自分達の帝国領との差を誇示しながら、{{ player_faction_name }}の拠点を品定めしています
 {{~ end ~}}
 {{~ else ~}}
-{{ formatted_job }}
+現在の行動:{{ formatted_job }}
 {{~ end ~}}
 {{~ # ★会話中のポーンとの関係 ~}}
 {{~ #自分以外のpawns ~}}
@@ -336,15 +359,32 @@
 {{ op.name }}は{{ rel_type }}
 {{~ end ~}}
 {{~ end ~}}
-{{~ all_jobs = all_jobs | array.add formatted_job ~}}
+{{~ all_jobs_and_incident = all_jobs_and_incident | array.add formatted_job ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ #ポーン取得ループ終わり ~}}
+
+{{~ #★話題等にtipsが含まれていた場合valueを出力 ~}}
+{{~ for job in all_jobs_and_incident ~}}
+{{~ for tip in tips_map ~}}
+{{~ if job | string.contains tip.key ~}}
+{{ tip.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
 {{~ #★各ポーンのジョブに外部ポーン名が含まれていた場合検知 ~}}
-{{~ for job in all_jobs ~}}
+{{~ for job in all_jobs_and_incident ~}}
 {{~ target_pawn = "" ~}}
 {{~ for one_pawn in all_pawns_list ~}}
 {{~ if job | string.contains one_pawn.name ~}}
+{{~ #会話中のポーンであれば除外（冗長になるので）~}}
+{{~ is_self = false ~}}
+{{~ for main_pawn in pawns ~}}
+{{~ if main_pawn.name == one_pawn.name ~}}
+{{~ is_self = true ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ if is_self == false ~}}
 {{~ target_pawn = one_pawn ~}}
 {{~ already_exists = pawn_name_history | array.contains target_pawn.name ~}}
 {{~ if !already_exists ~}}
@@ -352,50 +392,44 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
+{{~ end ~}}
 {{~ if target_pawn != "" ~}}
-{{~ if !already_exists ~}}
 {{~ # 対象ポーンが派閥を持っているか（独自プロパティ参照） ~}}
 {{~ if target_pawn.faction != "" ~}}
 {{~ if target_pawn.RaceProps.Humanlike ~}}
 {{~ if target_pawn.Faction.isPlayer ~}}
-{{ target_pawn.name }}は自派閥の人名です
+{{ target_pawn.name }}はプレイヤー派閥所属の人名
 {{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
 {{ target_pawn.name }}は敵対派閥{{ target_pawn.Faction }}所属の人名
 {{~ else if target_pawn.Faction.PlayerRelationKind == "Ally" ~}}
 {{ target_pawn.name }}は同盟派閥{{ target_pawn.Faction }}所属の人名
 {{~ else ~}}
-{{ target_pawn.name }}は別派閥{{ target_pawn.Faction }}所属の人名
+{{ target_pawn.name }}は中立派閥{{ target_pawn.Faction }}所属の人名
 {{~ end ~}}
 {{~ else if target_pawn.RaceProps.Animal ~}}
 {{~ if target_pawn.Faction.isPlayer ~}}
-{{ target_pawn.name }}は一緒に暮らしている生き物です
+{{ target_pawn.name }}は一緒に暮らしている生き物
 {{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
-{{ target_pawn.name }}は敵対的な生き物です
+{{ target_pawn.name }}は敵対的な生き物
 {{~ end ~}}
 {{~ else if target_pawn.RaceProps.IsMechanoid ~}}
 {{~ if target_pawn.Faction.isPlayer ~}}
-{{ target_pawn.name }}は{{ player_faction_name }}で使役しているメカノイドです
+{{ target_pawn.name }}は{{ player_faction_name }}で使役しているメカノイド
 {{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
-{{ target_pawn.name }}は敵対的なメカノイドです
+{{ target_pawn.name }}は敵対的なメカノイド
 {{~ end ~}}
 {{~ else if target_pawn.RaceProps.IsAnomalyEntity ~}}
 {{~ if target_pawn.Faction.isPlayer ~}}
-{{ target_pawn.name }}は{{ player_faction_name }}で使役している異形です
+{{ target_pawn.name }}は{{ player_faction_name }}で使役している異形
 {{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
-{{ target_pawn.name }}は敵対的な異形生命体です
+{{ target_pawn.name }}は敵対的な異形生命体
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-
-{{~ # ★戦闘中かどうか ~}}
-{{~ if prompt | string.contains "urgent tone" ~}}
-戦闘中です
 {{~ end ~}}
 {{~ # ★インシデント発生時、大量の分岐が必要かも ~}}
-{{ if prompt | string.contains "Talk about incident"~}}
+{{~ if prompt | string.contains "Talk about incident"~}}
 {{~ incident = prompt | string.split "[" | array.last | string.split "]" | array.first ~}}
 {{~ if incident | string.contains "友人や家族が" ~}}
 {{~ dead_incident = incident | string.split "." | array.first ~}}
@@ -425,6 +459,20 @@
 {{~ if incident | string.contains f_name ~}}
 {{ f_name }}は{{ p.name }}の家族です
 {{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+
+{{~ # ■現在マップにおけるポーン集団の目的 ~}}
+{{~ for load in pawn.map.lordmanager.lords ~}}
+{{~ for ln in load_name ~}}
+{{~ if load.LordJob | string.contains ln.key ~}}
+{{~ ln.value ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ for tn in toil_name ~}}
+{{~ if load.CurLordToil | string.contains tn.key ~}}
+{{~ tn.value ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
