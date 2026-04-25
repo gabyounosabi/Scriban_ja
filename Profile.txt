@@ -80,7 +80,6 @@
 {{~ toil_name = {
     "Breaching": "建物を全て破壊するつもりのようです",
     "Sappers": "壁を破壊し侵入経路を作るつもりのようです",
-    "StageThenAttack": "敵対派閥が襲撃準備を",
     "AssaultColony": "攻撃されています！",
 } ~}}
 {{~ # ▼補足情報辞書、keyが話題、ジョブ、インシデント内に含まれている場合、補足情報としてvalueを出力 ~}}
@@ -117,6 +116,11 @@
 {{~ all_pawns_list = d_pawns | array.concat pawn.Map.mapPawns.AllPawns ~}}
 {{~ # ■プレイヤー派閥名 ~}}
 {{~ player_faction_name = Find.FactionManager.OfPlayer.Name ~}}
+{{~ # ■周囲に敵対派閥がいるかどうか ~}}
+{{~ danger_flag = false ~}}
+{{~ if pawn.map.dangerWatcher.DangerRating | string.contains "High" || pawn.map.dangerWatcher.DangerRating | string.contains "Low" ~}}
+{{~ danger_flag = true ~}}
+{{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{~ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor ~}}
 {{~ if map_temp <= -74 ~}}
@@ -200,6 +204,26 @@
 {{ formatted_traits }}
 {{~ # ★入植者だけに走らせる処理★ ~}}
 {{~ if is_player_pawn ~}}
+{{~ # ▼攻撃、被弾時刻取得 ~}}
+{{~ latest_tick = 99999 ~}}
+{{~ if p.mindState.lastRangedHarmTick != 0 ~}}
+{{~ latest_tick = p.mindState.lastRangedHarmTick ~}}
+{{~ end ~}}
+{{~ if p.mindState.lastMeleeThreatHarmTick != 0 ~}}
+{{~ if latest_tick > p.mindState.lastRangedHarmTick ~}}
+{{~ latest_tick = p.mindState.lastRangedHarmTick ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ▼ゲーム内で1時間以内に攻撃被弾していた場合 ~}}
+{{~ if latest_tick != 99999 ~}}
+{{~ last_attack_tick = Find.tickmanager.ticksgame - p.mindState.lastAttackTargetTick ~}}
+{{~ last_harm_tick = Find.tickmanager.ticksgame - latest_tick ~}}
+{{~ if last_attack_tick < 2500 || last_harm_tick < 2500 ~}}
+{{~ if danger_flag == true ~}}
+このポーンは戦闘中で敵の攻撃を受けています！
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
 {{~ # ★10以上のスキルのみを取得し何が得意かを表示（入植者のみ） ~}}
 {{~ skill_names = [] ~}}
 {{~ for item in (p.skills | string.replace "Skills: " "" | string.split ", ") ~}}
