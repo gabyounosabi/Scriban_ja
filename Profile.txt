@@ -1,5 +1,9 @@
 {{~ # 使用の際は新しくエントリを作成し、Base Instructionの下（JSON Formatを使っている場合はその下）に設置する。Pawn Profilesは削除かオフにする。また、コンテキストフィルターのポーン情報、環境は全てONにする（OFFだとRimtalk独自プロパティが取得出来ない、） ~}}
 {{~ # ▼辞書セット、自環境に合わせてここを編集▼ ~}}
+{{~ # ▼補足情報辞書、keyが話題、ジョブ、インシデント内に含まれている場合、補足情報としてvalueを出力 ~}}
+{{~ tips_map = {
+    "サイトスティーラー": "サイトスティーラーは姿を消せる異形生命体です",
+} ~}}
 {{~ # ▼表示したい天気、天候がkeyの場合valueを出力、開発者モードのChange weatherで大体の天気を確認可能 ~}}
 {{~ weather_map = {
     "軌道上": "軌道上にいます",
@@ -34,6 +38,7 @@
     "切創": "切創により苦しんでいます",
     "噛み傷": "噛み傷により苦しんでいます",
     "凍傷":"凍傷で苦しんでいます",
+    "銃創": "銃創により苦しんでいます",
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みに関係なく常に表示） ~}}
 {{~ status_conditions = {
@@ -64,8 +69,8 @@
     "不安": "ストレスを抱えているようです",
     "崩壊寸前": "精神状態は限界に達しており崩壊寸前です",
 } ~}}
-{{~ # ▼表示したい外部ポーン情報、keyがloadjobにある場合valueを出力 ~}}
-{{~ load_name = {
+{{~ # ▼表示したい外部ポーン情報、keyがlordjobにある場合valueを出力 ~}}
+{{~ lord_name = {
     "BegForItems": "慈悲を求める乞食達が訪れています",
     "TradeWithColony": "近くにトレーダーが訪れています",
     "StageThenAttack": "敵対派閥が襲撃準備をしています",
@@ -75,16 +80,23 @@
     "SleepThenMechanoidsDefend": "敵対的なメカノイドが近くにいます",
     "MechanoidsDefend": "敵対的なメカノイドが近くにいます",
     "CreepJoiner": "怪しい雰囲気の人間が来ています",
+    "ShamblerSwarm": "恐ろしい歩く死体が拠点の付近をうろついています",
+} ~}}
+{{~ # ▼表示したい外部ポーン情報、keyがlordjobにある場合valueを出力、ポーン個人用 ~}}
+{{~ lord_name_for_pawn = {
+    "BegForItems": "物乞いをしています",
+    "TradeWithColony": "トレーダーとして訪れています",
+    "StageThenAttack": "襲撃準備をしています",
+    "AssaultColony": "襲撃を行っています！",
+    "AssistColony": "援軍として訪れています",
+    "VisitColony": "訪問者として訪れています",
+    "CreepJoiner": "怪しい雰囲気を纏いつつ、入植者に言いたいことがあるようです",
 } ~}}
 {{~ # ▼表示したい外部ポーン情報、keyがCurLordToilにある場合valueを出力 ~}}
 {{~ toil_name = {
     "Breaching": "建物を全て破壊するつもりのようです",
     "Sappers": "壁を破壊し侵入経路を作るつもりのようです",
     "AssaultColony": "攻撃されています！",
-} ~}}
-{{~ # ▼補足情報辞書、keyが話題、ジョブ、インシデント内に含まれている場合、補足情報としてvalueを出力 ~}}
-{{~ tips_map = {
-    "サイトスティーラー": "サイトスティーラーは姿を消せる異形生命体です",
 } ~}}
 {{~ # ■世界情報整理■ ~}}
 {{~ # ■インシデント格納用文字列 ~}}
@@ -116,6 +128,8 @@
 {{~ all_pawns_list = d_pawns | array.concat pawn.Map.mapPawns.AllPawns ~}}
 {{~ # ■プレイヤー派閥名 ~}}
 {{~ player_faction_name = Find.FactionManager.OfPlayer.Name ~}}
+{{~ # ■pawnsに自派閥ポーンが含まれているかフラグ ~}}
+{{~ has_player_pawn = false ~}}
 {{~ # ■周囲に敵対派閥がいるかどうか ~}}
 {{~ danger_flag = false ~}}
 {{~ if pawn.map.dangerWatcher.DangerRating | string.contains "High" || pawn.map.dangerWatcher.DangerRating | string.contains "Low" ~}}
@@ -181,12 +195,13 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★設定されたペルソナ ~}}
-個性:{{ p.personality }}
+{{ p.personality }}
 {{~ # ★派閥によって台詞を調整 ~}}
 {{~ if is_player_pawn && p.Faction.hasname ~}}
 派閥:{{ p.Faction.Name }}
+{{~ has_player_pawn = true ~}}
 {{~ else if is_player_pawn ~}}
-生活の基盤を整えている途中です
+{{~ has_player_pawn = true ~}}
 {{~ else if is_hostile_pawn ~}}
 派閥:{{ p.Faction.Name }}（敵対）
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し挑発的な言葉を投げかけます
@@ -195,6 +210,14 @@
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し友好的な言葉を投げかけます
 {{~ else ~}}
 派閥:{{ p.Faction.Name }}（中立）
+{{~ end ~}}
+{{~ # ★ポーンの目的 ~}}
+{{~ if !(is_player_pawn) ~}}
+{{~ for p_lord in lord_name_for_pawn ~}}
+{{~ if p.lord.lordjob | string.contains p_lord.key ~}}
+{{ p_lord.value }}
+{{~ end ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ # ★辞書を使い才能・性格を整形し表示 ~}}
 {{~ formatted_traits = p.traits | string.replace "Traits: " "特性:" ~}}
@@ -488,15 +511,17 @@
 {{~ end ~}}
 
 {{~ # ■現在マップにおけるポーン集団の目的 ~}}
-{{~ for load in pawn.map.lordmanager.lords ~}}
-{{~ for ln in load_name ~}}
-{{~ if load.LordJob | string.contains ln.key ~}}
-{{~ ln.value ~}}
+{{~ if has_player_pawn == true ~}}
+{{~ for Lord in pawn.map.lordmanager.lords ~}}
+{{~ for ln in Lord_name ~}}
+{{~ if Lord.LordJob | string.contains ln.key ~}}
+{{ ln.value }}
 {{~ end ~}}
 {{~ end ~}}
 {{~ for tn in toil_name ~}}
-{{~ if load.CurLordToil | string.contains tn.key ~}}
-{{~ tn.value ~}}
+{{~ if Lord.CurLordToil | string.contains tn.key ~}}
+{{ tn.value }}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
