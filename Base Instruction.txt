@@ -1,4 +1,4 @@
-{{~ # ▼Base Instructionのサンプル ~}}
+{{~ # Base Instructionのサンプル ~}}
 {{~ player_pawns = [] ~}}
 {{~ hostile_pawns = [] ~}}
 {{~ ally_pawns = [] ~}}
@@ -13,11 +13,11 @@
 {{~ if pawn.map.dangerWatcher.DangerRating | string.contains "High" || pawn.map.dangerWatcher.DangerRating | string.contains "Low" ~}}
 {{~ danger_flag = true ~}}
 {{~ end ~}}
-{{~ # ▼ポーンループ ~}}
+{{~ # ★ポーンループ ~}}
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
 {{~ if p.Faction.IsPlayer ~}}
-{{~ # ▼攻撃、被弾時刻取得 ~}}
+{{~ # ★攻撃、被弾時刻取得 ~}}
 {{~ latest_tick = 99999 ~}}
 {{~ if p.mindState.lastRangedHarmTick != 0 ~}}
 {{~ latest_tick = p.mindState.lastRangedHarmTick ~}}
@@ -27,7 +27,7 @@
 {{~ latest_tick = p.mindState.lastRangedHarmTick ~}}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ▼ゲーム内で1時間以内に攻撃被弾していた場合 ~}}
+{{~ # ★ゲーム内で1時間以内に攻撃被弾していた場合 ~}}
 {{~ if latest_tick != 99999 ~}}
 {{~ last_attack_tick = Find.tickmanager.ticksgame - p.mindState.lastAttackTargetTick ~}}
 {{~ last_harm_tick = Find.tickmanager.ticksgame - latest_tick ~}}
@@ -82,9 +82,16 @@
 {{~ end ~}}
 
 出力形式
+{{~ if settings.ApplyMoodAndSocialEffects ~}}
+社交的な相互作用が発生する場合は、以下のキーを追加してください:
+JSONL: {"name": "キャラ名", "text": "台詞", "act": "行動タイプ", "target": "対象キャラ名"}
+"act"の値: "Insult", "Slight", "Chat", "Kind"のいずれか
+"target": "会話の対象となるキャラクター名"
+{{~ else ~}}
 JSONL: {"name": "キャラ名", "text": "台詞"}
+{{~ end ~}}
 
 制約
 - 日本語のみ
 - 1~2台詞、各200文字以内
-- 年齢・性別・心情に応じた口調
+- 年齢・性別に応じた口調
