@@ -29,7 +29,7 @@
     "夜のよたか": "現在時刻は夜です",
     "野宿した": "野宿をしました",
     "凍えながら夜を過ごした": "肌寒い環境で夜を過ごしました",
-    "腐乱死体を見た": "腐乱死体を見た記憶が離れません",
+    "腐乱死体を見た": "近くに腐乱死体があり不快",
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
 {{~ health_conditions = {
@@ -60,6 +60,7 @@
     "歓喜": "みんなに愛される存在",
     "苦悩する芸術家": "独特な芸術観",
     "ドラッグ常用者": "",
+    "気持ち悪い息づかい": "コミュ障",
 } ~}}
 {{~ # ▼心情用辞書 ~}}
 {{~ mood_map = {
@@ -112,6 +113,8 @@
 {{~ end ~}}
 {{~ # ■話題ポーン格納用配列 ~}}
 {{~ pawn_name_history = [] ~}}
+{{~ # ■会話中ポーン文字列 ~}}
+{{~ pawns_string = pawns | array.join "、" ~}}
 {{~ # ■全世界の死亡ポーン、処理が重いのは7割これのせい ~}}
 {{~ all_pawns = PawnsFinder.All_AliveOrDead ~}}
 {{~ d_pawns = [] ~}}
@@ -182,8 +185,8 @@
 {{~ if p.equipment | string.contains "Weapon:" ~}}
 {{~ weapon = p.equipment | string.split "Weapon: " | array.last | string.split ", Apparel:" | array.first | string.strip ~}}
 {{~ end ~}}
-
 {{~ # ★ポーン名 ~}}
+
 {{ p.name }}:{{ if p.gender | string.contains "Male" }}男性{{ else }}女性{{ end }} {{ p.age }}歳
 {{~ # ★役割 ~}}
 {{~ role_map = {
@@ -528,3 +531,12 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
+
+{{~ # ▼直近の会話 ~}}
+{{~ if chat.history | string.contains "name" ~}}
+直近の会話履歴
+{{~ history = chat.history | string.split "text=" | array.last ~}}
+{{~ history ~}}
+{{~ end ~}}
+
+上記を踏まえ{{ pawns_string }}の新しい会話を生成してください
