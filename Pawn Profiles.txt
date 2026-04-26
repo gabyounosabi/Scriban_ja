@@ -19,17 +19,20 @@
     "死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません",
     "強風": "屋外では乾燥した強い風が吹き荒れています",
 } ~}}
-{{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力 ~}}
+{{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力（非戦闘時のみ、喜びや戦闘に関係ないもの） ~}}
 {{~ thought_conditions = {
-    "ひどい栄養失調": "十分な栄養が摂れておらず活動に支障が出ています",
-    "飢餓": "餓死寸前で呂律すら回りません",
-    "激しい痛み": "激しい痛みを感じています",
-    "気が遠くなる痛み": "気が遠くなるほどの痛みを感じています",
     "弁当を食べた": "美味しいお弁当を食べて喜んでいます",
     "夜のよたか": "現在時刻は夜です",
     "野宿した": "野宿をしました",
     "凍えながら夜を過ごした": "肌寒い環境で夜を過ごしました",
     "腐乱死体を見た": "近くに腐乱死体があり不快",
+} ~}}
+{{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力（常時表示、戦闘時にも表示されます） ~}}
+{{~ battle_thought_conditions = {
+    "ひどい栄養失調": "十分な栄養が摂れておらず活動に支障が出ています",
+    "飢餓": "餓死寸前で呂律すら回りません",
+    "激しい痛み": "気絶する程の痛みを感じています",
+    "気が遠くなる痛み": "死を覚悟する程の痛みを感じています",
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
 {{~ health_conditions = {
@@ -40,6 +43,7 @@
     "噛み傷": "噛み傷により苦しんでいます",
     "凍傷":"凍傷で苦しんでいます",
     "銃創": "銃創により苦しんでいます",
+    "ビーム熱傷":"レーザー攻撃による火傷を負っています",
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みに関係なく常に表示） ~}}
 {{~ status_conditions = {
@@ -73,14 +77,14 @@
 } ~}}
 {{~ # ▼表示したい外部ポーン情報、keyがlordjobにある場合valueを出力 ~}}
 {{~ lord_name = {
-    "BegForItems": "慈悲を求める乞食達が訪れています",
-    "TradeWithColony": "近くにトレーダーが訪れています",
-    "StageThenAttack": "敵対派閥が襲撃準備をしています",
-    "AssaultColony": "敵対派閥が襲撃を行っています！",
+    "BegForItems": "から慈悲を求める乞食達が訪れています",
+    "TradeWithColony": "からトレーダーが訪れています",
+    "StageThenAttack": "が襲撃準備をしています",
+    "AssaultColony": "から襲撃を受けています！",
     "AssistColony": "同盟派閥の援軍が助けに来ています",
     "VisitColony": "訪問者が訪れています",
     "SleepThenMechanoidsDefend": "敵対的なメカノイドが近くにいます",
-    "MechanoidsDefend": "敵対的なメカノイドが近くにいます",
+    "MechanoidsDefend": "のメカノイドが近くにいます",
     "CreepJoiner": "怪しい雰囲気の人間が来ています",
     "ShamblerSwarm": "恐ろしい歩く死体が拠点の付近をうろついています",
 } ~}}
@@ -98,11 +102,18 @@
 {{~ toil_name = {
     "Breaching": "建物を全て破壊するつもりのようです",
     "Sappers": "壁を破壊し侵入経路を作るつもりのようです",
-    "AssaultColony": "攻撃されています！",
+    "AssaultColony": "侵攻されています！",
 } ~}}
 {{~ # ■世界情報整理■ ~}}
+{{~ # ■tips確認用配列、判定したい対象を適宜ここに入れていく ~}}
+{{~ tips_check_list = [] ~}}
 {{~ # ■話題ポーン格納用配列 ~}}
 {{~ pawn_name_history = [] ~}}
+{{~ # ■活動可能ポーン用配列 ~}}
+{{~ pawns_fine = [] ~}}
+{{~ # ■活動不能ポーン用配列 ~}}
+{{~ pawns_downed = [] ~}}
+{{~ pawn_downed_flag = false ~}}
 {{~ # ■会話中ポーン文字列 ~}}
 {{~ pawns_string = pawns | array.join "、" ~}}
 {{~ # ■ヒト狩り動物文字列 ~}}
@@ -120,12 +131,21 @@
 {{~ for pf_pawn in PawnsFinder.AllMapsCaravansAndTravellingTransporters_Alive_OfPlayerFaction ~}}
 {{~ player_faction_pawns = player_faction_pawns | array.add pf_pawn.name ~}}
 {{~ end ~}}
+{{~ # ■マップ内の人型自派閥ポーン ~}}
+{{~ player_pawns_humanlike = pawn.Map.mapPawns.FreeColonistsSpawned ~}}
 {{~ # ■マップ内の全ポーン+全世界の死亡ポーン ~}}
 {{~ all_pawns_list = d_pawns | array.concat pawn.Map.mapPawns.AllPawns ~}}
 {{~ # ■プレイヤー派閥名 ~}}
 {{~ player_faction_name = Find.FactionManager.OfPlayer.Name ~}}
 {{~ # ■pawnsに自派閥ポーンが含まれているかフラグ ~}}
 {{~ has_player_pawn = false ~}}
+{{~ for p in pawns ~}}
+{{~ if p.RaceProps.Humanlike ~}}
+{{~ if p.Faction.IsPlayer ~}}
+{{~ has_player_pawn = true ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
 {{~ # ■周囲に敵対派閥がいるかどうか ~}}
 {{~ danger_flag = false ~}}
 {{~ if (pawn.map.dangerWatcher.DangerRating | string.contains "High") || (pawn.map.dangerWatcher.DangerRating | string.contains "Low") ~}}
@@ -135,6 +155,8 @@
 {{~ if map_pawn.InMentalState ~}}
 {{~ if map_pawn.MentalStateDef == "ManhunterPermanent" ~}}
 {{~ manhunter_name = map_pawn.name ~}}
+{{~ # tips確認用配列に動物名を追加 ~}}
+{{~ tips_check_list = tips_check_list | array.add manhunter_name ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -164,6 +186,59 @@
 {{ weather.value }}
 {{~ end ~}}
 {{~ end ~}}
+{{~ # ■現在マップにおけるポーン集団の目的、会話ポーンに自ポーンがいる時のみ表示 ~}}
+{{~ if has_player_pawn == true ~}}
+{{~ if pawn.map.lordmanager.lords | array.size > 0  }}
+周囲の状況
+{{~ for lord in pawn.map.lordmanager.lords ~}}
+{{~ # loadのFaction下にアクセス出来ないパターンがあるので触らないよう注意、pawn.profile内にRole: Enemyが含まれているかで敵対判別を代用 ~}}
+{{~ enemy_lord_flag = lord.ownedPawns[0].profile | string.contains "Role: Enemy Group" ~}}
+{{~ for ln in lord_name ~}}
+{{~ if lord.LordJob | string.contains ln.key ~}}
+
+{{~ if lord.faction != "" ~}}
+派閥:{{ lord.faction }}{{ ln.value }}
+{{~ else ~}}
+{{ lord.faction }}{{ ln.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ for tn in toil_name ~}}
+{{~ if lord.CurLordToil | string.contains tn.key ~}}
+{{ tn.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ if danger_flag ~}}
+{{~ if lord.faction != "" ~}}
+
+{{~ if enemy_lord_flag ~}}
+{{~ if lord.numPawnsEverGained != null ~}}
+現在{{ lord.numPawnsLostViolently }}体討伐済み
+残り{{ lord.numPawnsEverGained - lord.numPawnsLostViolently }}体です！
+{{~ hostile_loads_flag = true ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ for h_pawn in player_pawns_humanlike ~}}
+{{~ if h_pawn.Downed ~}}
+{{~ pawn_downed_flag = true ~}}
+{{~ pawns_downed = pawns_downed | array.add h_pawn ~}}
+{{~ else ~}}
+{{~ pawns_fine = pawns_fine | array.add h_pawn ~}}
+{{~ end ~}}
+{{~ end ~}}
+
+{{~ if hostile_loads_flag == true ~}}
+
+プレイヤー派閥である{{player_faction_name}}の全メンバーは{{player_pawns_humanlike.size}}名
+{{~ if pawn_downed_flag ~}}
+動けるメンバーは残り{{pawns_fine.size}}名です
+{{~ end ~}}
+{{~ end ~}}
 {{~ # ★ポーン取得ループ開始 ~}}
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
@@ -176,6 +251,8 @@
 {{~ is_ally_pawn = !is_player_pawn && p.Faction.PlayerRelationKind == "Ally" ~}}
 {{~ # ■ポーンが敵対派閥かどうか ~}}
 {{~ is_hostile_pawn = !is_player_pawn && p.Faction.PlayerRelationKind == "Hostile" ~}}
+{{~ # ■ポーンが戦闘中かどうか ~}}
+{{~ is_combat = false ~}}
 {{~ # ■fullthoughtが安全に使用出来るかフラグ ~}}
 {{~ can_use_fullthought = false ~}}
 {{~ if p.thoughts != null ~}}
@@ -216,9 +293,7 @@
 {{~ # ★派閥によって台詞を調整 ~}}
 {{~ if is_player_pawn && p.Faction.hasname ~}}
 派閥:{{ p.Faction.Name }}
-{{~ has_player_pawn = true ~}}
 {{~ else if is_player_pawn ~}}
-{{~ has_player_pawn = true ~}}
 {{~ else if is_hostile_pawn ~}}
 派閥:{{ p.Faction.Name }}（敵対）
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し挑発的な言葉を投げかけます
@@ -256,13 +331,41 @@
 {{~ latest_tick = p.mindState.lastRangedHarmTick ~}}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ▼ゲーム内で1時間以内に攻撃被弾していた場合 ~}}
+{{~ # ▼ゲーム内で2時間以内に攻撃被弾していた場合 ~}}
+{{~ if danger_flag == true ~}}
 {{~ if latest_tick != 99999 ~}}
 {{~ last_attack_tick = Find.tickmanager.ticksgame - p.mindState.lastAttackTargetTick ~}}
 {{~ last_harm_tick = Find.tickmanager.ticksgame - latest_tick ~}}
-{{~ if last_attack_tick < 2500 || last_harm_tick < 2500 ~}}
-{{~ if danger_flag == true ~}}
-このポーンは戦闘中で敵の攻撃を受けています！
+{{~ if last_attack_tick < 5000 || last_harm_tick < 5000 ~}}
+{{~ is_combat = true ~}}
+現在戦闘中です！
+{{~ if weapon != "" ~}}
+装備:{{ weapon }}
+{{~ end ~}}
+{{~ # ★戦闘用ステータス表示 ~}}
+{{~ for b_status in battle_status_conditions ~}}
+{{~ if p.health | string.contains b_status.key ~}}
+{{ b_status.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # tips確認用配列に武器名を追加 ~}}
+{{~ tips_check_list = tips_check_list | array.add weapon ~}}
+{{~ else if last_attack_tick < 50000 || last_harm_tick < 50000 ~}}
+{{~ is_combat = true ~}}
+戦闘状態を継続中です
+{{~ if weapon != "" ~}}
+装備:{{ weapon }}
+{{~ end ~}}
+{{~ # ★戦闘用ステータス表示 ~}}
+{{~ for b_status in battle_status_conditions ~}}
+{{~ if p.health | string.contains b_status.key ~}}
+{{ b_status.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # tips確認用配列に武器名を追加 ~}}
+{{~ tips_check_list = tips_check_list | array.add weapon ~}}
+{{~ else ~}}
+非戦闘中です
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -279,18 +382,27 @@
 {{~ if skill_names | array.size > 0 ~}}
 得意スキル:{{ skill_names | array.join "、" }}
 {{~ end ~}}
+{{~ # ★fullthought使えるかチェック ~}}
+{{~ if can_use_fullthought == true ~}}
+{{~ if !is_combat ~}}
 {{~ # ★現在の心情 ~}}
 {{~ for mood in mood_map ~}}
 {{~ if p.mood | string.contains mood.key ~}}
 心情:{{ mood.value }}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★fullthought使えるかチェック ~}}
-{{~ if can_use_fullthought == true ~}}
 {{~ # ★辞書を使い欲求を描写（入植者のみ） ~}}
 {{~ for thought_condition in thought_conditions ~}}
 {{~ if p.fullthought | string.contains thought_condition.key ~}}
 {{ thought_condition.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ else ~}}
+{{~ # ★辞書を使い戦闘中でも表示する欲求を描写（入植者のみ） ~}}
+{{~ for battle_thought_condition in battle_thought_conditions ~}}
+{{~ if p.fullthought | string.contains battle_thought_condition.key ~}}
+{{ battle_thought_condition.value }}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★身近な人や動物の死を描写 ~}}
@@ -313,6 +425,25 @@
 {{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
 この子は幼く「あう～」のような赤ちゃん言葉でしか話せません
 {{~ end ~}}
+{{~ else ~}}
+{{~ # ★入植者以外 ~}}
+{{~ # ★fullthought使えるかチェック ~}}
+{{~ if can_use_fullthought == true ~}}
+{{~ # ★辞書を使い戦闘中でも表示する欲求を描写（入植者のみ） ~}}
+{{~ for battle_thought_condition in battle_thought_conditions ~}}
+{{~ if p.fullthought | string.contains battle_thought_condition.key ~}}
+{{ battle_thought_condition.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # ★辞書を使い怪我、病気を描写（痛みが強い時のみ） ~}}
+{{~ if (p.fullthought | string.contains "深刻な痛み") || (p.fullthought | string.contains "激しい痛み") || (p.fullthought | string.contains "気が遠くなる痛み") ~}}
+{{~ for health_condition in health_conditions ~}}
+{{~ if p.health | string.contains health_condition.key ~}}
+{{ health_condition.value }}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ # ★ここまで★ ~}}
 {{~ # ★辞書を使い常に表示したい健康状態を描写 ~}}
@@ -323,9 +454,7 @@
 {{~ end ~}}
 {{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
 {{~ # ★敵対派閥がいる場合も現在地を表示 ~}}
-{{~ if danger_flag ~}}
-現在地:{{ p.location }}
-{{~ else if p.location | string.contains "外気温" && p.map.weather | string.contains "軌道上" ~}}
+{{~ if p.location | string.contains "外気温" && p.map.weather | string.contains "軌道上" ~}}
 現在地:宇宙空間
 {{~ else if p.location | string.contains "外気温" ~}}
 現在地:屋外
@@ -333,6 +462,9 @@
 {{~ if !(p.location | string.contains "未定") ~}}
 {{~ if map_temp == -75 ~}}
 {{ p.location }}にいます、真空状態です
+{{~ else if danger_flag ~}}
+現在地:
+{{ p.location }}
 {{~ else ~}}
 {{~ for weather in weather_map ~}}
 {{~ if p.location | string.contains weather.key ~}}
@@ -429,14 +561,16 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ all_jobs_and_incident = all_jobs_and_incident | array.add formatted_job ~}}
+{{~ # tips確認用配列と結合 ~}}
+{{~ tips_check_list = tips_check_list | array.concat all_jobs_and_incident ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ #ポーン取得ループ終わり ~}}
 
-{{~ #★話題等にtipsが含まれていた場合valueを出力 ~}}
-{{~ for job in all_jobs_and_incident ~}}
+{{~ #★tips確認用配列に辞書内容が含まれていた場合valueを出力 ~}}
+{{~ for t_list in tips_check_list ~}}
 {{~ for tip in tips_map ~}}
-{{~ if job | string.contains tip.key ~}}
+{{~ if t_list | string.contains tip.key ~}}
 {{ tip.value }}
 {{~ end ~}}
 {{~ end ~}}
@@ -458,18 +592,18 @@
 {{~ already_exists = pawn_name_history | array.contains target_pawn.name ~}}
 {{~ if !already_exists ~}}
 {{~ pawn_name_history = pawn_name_history | array.add target_pawn.name ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ if target_pawn != "" ~}}
 {{~ # 対象ポーンが派閥を持っているか（独自プロパティ参照） ~}}
+{{~ # シャンブラーやMOD種族等のFaction以下にアクセスしようとするとnullすら返らない時があるので注意 ~}}
 {{~ if target_pawn.faction != "" ~}}
 {{~ if target_pawn.RaceProps.Humanlike ~}}
 {{~ if target_pawn.Faction.isPlayer ~}}
 {{ target_pawn.name }}はプレイヤー派閥所属の人名
 {{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
+{{~ if !(target_pawn.IsShambler) ~}}
 {{ target_pawn.name }}は敵対派閥{{ target_pawn.Faction }}所属の人名
+{{~ else ~}}
+{{ target_pawn.name }}とは歩く死体と化した元人間です
+{{~ end ~}}
 {{~ else if target_pawn.Faction.PlayerRelationKind == "Ally" ~}}
 {{ target_pawn.name }}は同盟派閥{{ target_pawn.Faction }}所属の人名
 {{~ else ~}}
@@ -488,10 +622,9 @@
 {{ target_pawn.name }}は敵対的なメカノイド
 {{~ end ~}}
 {{~ else if target_pawn.RaceProps.IsAnomalyEntity ~}}
-{{~ if target_pawn.Faction.isPlayer ~}}
-{{ target_pawn.name }}は{{ player_faction_name }}で使役している異形
-{{~ else if target_pawn.Faction.PlayerRelationKind == "Hostile" ~}}
 {{ target_pawn.name }}は敵対的な異形生命体
+{{~ end ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -532,27 +665,12 @@
 {{~ end ~}}
 {{~ end ~}}
 
-{{~ # ■現在マップにおけるポーン集団の目的 ~}}
-{{~ if has_player_pawn == true ~}}
-{{~ for lord in pawn.map.lordmanager.lords ~}}
-{{~ for ln in lord_name ~}}
-{{~ if lord.LordJob | string.contains ln.key ~}}
-{{ ln.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ for tn in toil_name ~}}
-{{~ if lord.CurLordToil | string.contains tn.key ~}}
-{{ tn.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-
 {{~ # ▼直近の会話 ~}}
 {{~ if chat.history | string.contains "name" ~}}
 直近の会話履歴
 {{~ history = chat.history | string.split "text=" | array.last ~}}
 {{~ history ~}}
 {{~ end ~}}
+
 
 上記を踏まえ{{ pawns_string }}の新しい会話を生成してください
