@@ -17,6 +17,7 @@
     "毒雨": "屋外では有毒な雨が降っています",
     "盲目の霧": "屋外は濃い霧に包まれています",
     "死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません",
+    "強風": "屋外では乾燥した強い風が吹き荒れています",
 } ~}}
 {{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力 ~}}
 {{~ thought_conditions = {
@@ -205,7 +206,7 @@
 {{~ else if is_hostile_pawn ~}}
 派閥:{{ p.Faction.Name }}（敵対）
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し挑発的な言葉を投げかけます
-{{~ else if is_ally_pawn == "Ally" ~}}
+{{~ else if is_ally_pawn ~}}
 派閥:{{ p.Faction.Name }}（同盟）
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し友好的な言葉を投げかけます
 {{~ else ~}}
@@ -213,9 +214,11 @@
 {{~ end ~}}
 {{~ # ★ポーンの目的 ~}}
 {{~ if !(is_player_pawn) ~}}
+{{~ if p.lord != null ~}}
 {{~ for p_lord in lord_name_for_pawn ~}}
 {{~ if p.lord.lordjob | string.contains p_lord.key ~}}
 {{ p_lord.value }}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -512,14 +515,14 @@
 
 {{~ # ■現在マップにおけるポーン集団の目的 ~}}
 {{~ if has_player_pawn == true ~}}
-{{~ for Lord in pawn.map.lordmanager.lords ~}}
-{{~ for ln in Lord_name ~}}
-{{~ if Lord.LordJob | string.contains ln.key ~}}
+{{~ for lord in pawn.map.lordmanager.lords ~}}
+{{~ for ln in lord_name ~}}
+{{~ if lord.LordJob | string.contains ln.key ~}}
 {{ ln.value }}
 {{~ end ~}}
 {{~ end ~}}
 {{~ for tn in toil_name ~}}
-{{~ if Lord.CurLordToil | string.contains tn.key ~}}
+{{~ if lord.CurLordToil | string.contains tn.key ~}}
 {{ tn.value }}
 {{~ end ~}}
 {{~ end ~}}
