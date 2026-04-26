@@ -101,20 +101,12 @@
     "AssaultColony": "攻撃されています！",
 } ~}}
 {{~ # ■世界情報整理■ ~}}
-{{~ # ■インシデント格納用文字列 ~}}
-{{~ incident = "" ~}}
-{{~ if prompt | string.contains "Talk about incident"~}}
-{{~ incident = prompt | string.split "[" | array.last | string.split "]" | array.first ~}}
-{{~ end ~}}
-{{~ # ■ジョブ格納用配列 ~}}
-{{~ all_jobs_and_incident = [] ~}}
-{{~ if incident != "" ~}}
-{{~ all_jobs_and_incident = all_jobs_and_incident | array.add incident ~}}
-{{~ end ~}}
 {{~ # ■話題ポーン格納用配列 ~}}
 {{~ pawn_name_history = [] ~}}
 {{~ # ■会話中ポーン文字列 ~}}
 {{~ pawns_string = pawns | array.join "、" ~}}
+{{~ # ■ヒト狩り動物文字列 ~}}
+{{~ manhunter_name = "" ~}}
 {{~ # ■全世界の死亡ポーン、処理が重いのは7割これのせい ~}}
 {{~ all_pawns = PawnsFinder.All_AliveOrDead ~}}
 {{~ d_pawns = [] ~}}
@@ -136,8 +128,29 @@
 {{~ has_player_pawn = false ~}}
 {{~ # ■周囲に敵対派閥がいるかどうか ~}}
 {{~ danger_flag = false ~}}
-{{~ if pawn.map.dangerWatcher.DangerRating | string.contains "High" || pawn.map.dangerWatcher.DangerRating | string.contains "Low" ~}}
+{{~ if (pawn.map.dangerWatcher.DangerRating | string.contains "High") || (pawn.map.dangerWatcher.DangerRating | string.contains "Low") ~}}
 {{~ danger_flag = true ~}}
+{{~ # ヒト狩り判定 ~}}
+{{~ for map_pawn in pawn.Map.mapPawns.AllPawnsSpawned ~}}
+{{~ if map_pawn.InMentalState ~}}
+{{~ if map_pawn.MentalStateDef == "ManhunterPermanent" ~}}
+{{~ manhunter_name = map_pawn.name ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ if manhunter_name != "" ~}}
+人狩り{{ manhunter_name }}の群れに襲撃されています！
+{{~ end ~}}
+{{~ # ■インシデント格納用文字列 ~}}
+{{~ incident = "" ~}}
+{{~ if prompt | string.contains "Talk about incident"~}}
+{{~ incident = prompt | string.split "[" | array.last | string.split "]" | array.first ~}}
+{{~ end ~}}
+{{~ # ■ジョブ格納用配列 ~}}
+{{~ all_jobs_and_incident = [] ~}}
+{{~ if incident != "" ~}}
+{{~ all_jobs_and_incident = all_jobs_and_incident | array.add incident ~}}
 {{~ end ~}}
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{~ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor ~}}
@@ -309,7 +322,10 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★室内にいるかチェック（異常な温度の時のみ描写、現在地が真空かどうかのプロパティは現状無い？） ~}}
-{{~ if p.location | string.contains "外気温" && p.map.weather | string.contains "軌道上" ~}}
+{{~ # ★敵対派閥がいる場合も現在地を表示 ~}}
+{{~ if danger_flag ~}}
+現在地:{{ p.location }}
+{{~ else if p.location | string.contains "外気温" && p.map.weather | string.contains "軌道上" ~}}
 現在地:宇宙空間
 {{~ else if p.location | string.contains "外気温" ~}}
 現在地:屋外
