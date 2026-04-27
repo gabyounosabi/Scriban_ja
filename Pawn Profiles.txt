@@ -3,6 +3,7 @@
 {{~ # ▼補足情報辞書、keyが話題、ジョブ、インシデント内に含まれている場合、補足情報としてvalueを出力 ~}}
 {{~ tips_map = {
     "サイトスティーラー": "サイトスティーラーは姿を消せる異形生命体です",
+    "木材を精製中": "木材は精製するとバイオ液化燃料になります",
 } ~}}
 {{~ # ▼表示したい天気、天候がkeyの場合valueを出力、開発者モードのChange weatherで大体の天気を確認可能 ~}}
 {{~ weather_map = {
@@ -26,6 +27,7 @@
     "野宿した": "野宿をしました",
     "凍えながら夜を過ごした": "肌寒い環境で夜を過ごしました",
     "腐乱死体を見た": "近くに腐乱死体があり不快",
+    "学習への渇望": "この子は色んな事を学びたがっています",
 } ~}}
 {{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力（常時表示、戦闘時にも表示されます） ~}}
 {{~ battle_thought_conditions = {
@@ -37,6 +39,7 @@
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
 {{~ health_conditions = {
     "傷からの感染症": "傷から発症した感染症で苦しんでいます",
+    "機械化": "筋繊維機械化症により精密な動きが出来る代わりに少し痛みを感じています",
     "打撲": "打撲により苦しんでいます",
     "刺し傷": "刺し傷により苦しんでいます",
     "切創": "切創により苦しんでいます",
@@ -65,6 +68,7 @@
     "苦悩する芸術家": "独特な芸術観",
     "ドラッグ常用者": "",
     "気持ち悪い息づかい": "コミュ障",
+    "うぬぼれ屋": "自信家",
 } ~}}
 {{~ # ▼心情用辞書 ~}}
 {{~ mood_map = {
@@ -191,31 +195,51 @@
 {{~ if pawn.map.lordmanager.lords | array.size > 0  }}
 周囲の状況
 {{~ for lord in pawn.map.lordmanager.lords ~}}
-{{~ # loadのFaction下にアクセス出来ないパターンがあるので触らないよう注意、pawn.profile内にRole: Enemyが含まれているかで敵対判別を代用 ~}}
+{{~ # 霧がかかった場合取得しない？かも？~}}
+{{~ if lord.AnyActivePawn ~}}
+{{~ alive_lord_flag = false ~}}
+{{~ # lord生存フラグ~}}
+{{~ if lord.numPawnsEverGained != null && lord.numPawnsLostViolently != null ~}}
+{{~ if (lord.numPawnsEverGained - lord.numPawnsLostViolently) > 0 ~}}
+{{~ alive_lord_flag = true ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ # lordのFaction下にアクセス出来ないパターンがあるので触らないよう注意、pawn.profile内にRole: Enemyが含まれているかで敵対判別を代用 ~}}
+{{~ enemy_lord_flag = false ~}}
+{{~ if lord.ownedPawns.size > 0 ~}}
 {{~ enemy_lord_flag = lord.ownedPawns[0].profile | string.contains "Role: Enemy Group" ~}}
-{{~ for ln in lord_name ~}}
-{{~ if lord.LordJob | string.contains ln.key ~}}
-
+{{~ end ~}}
+{{~ # 一つでも敵対派閥がいるかどうかフラグ ~}}
+{{~ if enemy_lord_flag ~}}
+{{~ hostile_lords_flag = true ~}}
+{{~ end ~}}
+{{~ # ★ポーン集団出力開始 ~}}
 {{~ if lord.faction != "" ~}}
-派閥:{{ lord.faction }}{{ ln.value }}
-{{~ else ~}}
-{{ lord.faction }}{{ ln.value }}
+{{~ if alive_lord_flag ~}}
+
+派閥:{{~ lord.faction ~}}
+{{~ end ~}}
+{{~ for ln in lord_name ~}}
+{{~ # 辞書にあるlordjobは詳細を表示 ~}}
+{{~ if lord.LordJob | string.contains ln.key ~}}
+{{~ if alive_lord_flag ~}}
+{{ ln.value }}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ for tn in toil_name ~}}
 {{~ if lord.CurLordToil | string.contains tn.key ~}}
+{{~ if alive_lord_flag ~}}
 {{ tn.value }}
 {{~ end ~}}
 {{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
 {{~ if danger_flag ~}}
-{{~ if lord.faction != "" ~}}
-
 {{~ if enemy_lord_flag ~}}
-{{~ if lord.numPawnsEverGained != null ~}}
+{{~ if alive_lord_flag ~}}
 現在{{ lord.numPawnsLostViolently }}体討伐済み
-残り{{ lord.numPawnsEverGained - lord.numPawnsLostViolently }}体です！
-{{~ hostile_loads_flag = true ~}}
+残り{{ lord.numPawnsEverGained - lord.numPawnsLostViolently }}体です!
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -223,6 +247,7 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
+{{~ # プレイヤー派閥のダウン状況を取得 ~}}
 {{~ for h_pawn in player_pawns_humanlike ~}}
 {{~ if h_pawn.Downed ~}}
 {{~ pawn_downed_flag = true ~}}
@@ -231,9 +256,8 @@
 {{~ pawns_fine = pawns_fine | array.add h_pawn ~}}
 {{~ end ~}}
 {{~ end ~}}
-
-{{~ if hostile_loads_flag == true ~}}
-
+{{ # 敵対派閥の集団が一つでもある場合}}
+{{~ if hostile_lords_flag ~}}
 プレイヤー派閥である{{player_faction_name}}の全メンバーは{{player_pawns_humanlike.size}}名
 {{~ if pawn_downed_flag ~}}
 動けるメンバーは残り{{pawns_fine.size}}名です
@@ -463,14 +487,6 @@
 {{~ if p.Map.IsPlayerHome == false ~}}
 コロニー外で遠征活動中です
 {{~ end ~}}
-{{~ # ★現在マップは誰の領地か ~}}
-{{~ if pawn_faciton_name == Find.FactionManager.OfPlayer.name ~}}
-{{~ if p.Map.Parent.Faction.name != Find.FactionManager.OfPlayer.name ~}}
-{{~ if p.Map.Parent.Faction.PlayerRelationKind == "Hostile" ~}}
-敵対勢力{{ p.Map.Parent.Faction.Name }}の領地にいます
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
 {{~ # ★ポーンは今何をしているか、精神崩壊、戦闘中等で分岐処理、膨大かつp.jobが英語の場合もあるので注意 ~}}
 {{~ formatted_job =  p.job | string.replace "(traveling to)" "" ~}}
 {{~ # ★遺体に関する作業の場合は人か動物かを明確にする ~}}
@@ -542,12 +558,12 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ all_jobs_and_incident = all_jobs_and_incident | array.add formatted_job ~}}
-{{~ # tips確認用配列と結合 ~}}
-{{~ tips_check_list = tips_check_list | array.concat all_jobs_and_incident ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ #ポーン取得ループ終わり ~}}
 
+{{~ # tips確認用配列と結合 ~}}
+{{~ tips_check_list = tips_check_list | array.concat all_jobs_and_incident ~}}
 {{~ #★tips確認用配列に辞書内容が含まれていた場合valueを出力 ~}}
 {{~ for t_list in tips_check_list ~}}
 {{~ for tip in tips_map ~}}
