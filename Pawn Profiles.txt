@@ -425,25 +425,6 @@
 {{~ if p.ageTracker.CurLifeStage.defName == "HumanlikeBaby" ~}}
 この子は幼く「あう～」のような赤ちゃん言葉でしか話せません
 {{~ end ~}}
-{{~ else ~}}
-{{~ # ★入植者以外 ~}}
-{{~ # ★fullthought使えるかチェック ~}}
-{{~ if can_use_fullthought == true ~}}
-{{~ # ★辞書を使い戦闘中でも表示する欲求を描写（入植者のみ） ~}}
-{{~ for battle_thought_condition in battle_thought_conditions ~}}
-{{~ if p.fullthought | string.contains battle_thought_condition.key ~}}
-{{ battle_thought_condition.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★辞書を使い怪我、病気を描写（痛みが強い時のみ） ~}}
-{{~ if (p.fullthought | string.contains "深刻な痛み") || (p.fullthought | string.contains "激しい痛み") || (p.fullthought | string.contains "気が遠くなる痛み") ~}}
-{{~ for health_condition in health_conditions ~}}
-{{~ if p.health | string.contains health_condition.key ~}}
-{{ health_condition.value }}
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
 {{~ end ~}}
 {{~ # ★ここまで★ ~}}
 {{~ # ★辞書を使い常に表示したい健康状態を描写 ~}}
@@ -476,7 +457,7 @@
 {{~ end ~}}
 {{~ # ★立てるかチェック ~}}
 {{~ if p.Downed ~}}
-自力で立つことが出来ません
+怪我や病気により自力で立つことが出来ません
 {{~ end ~}}
 {{~ # ★現在自コロニー以外へ遠征中か（グラヴシップがある場所か否か） ~}}
 {{~ if p.Map.IsPlayerHome == false ~}}
