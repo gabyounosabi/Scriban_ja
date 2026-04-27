@@ -195,6 +195,8 @@
 {{~ if pawn.map.lordmanager.lords | array.size > 0  }}
 周囲の状況
 {{~ for lord in pawn.map.lordmanager.lords ~}}
+{{~ # トレーダー種別 ~}}
+{{~ trader_kind = "" ~}}
 {{~ # 霧がかかった場合取得しない？かも？~}}
 {{~ if lord.AnyActivePawn ~}}
 {{~ alive_lord_flag = false ~}}
@@ -206,8 +208,17 @@
 {{~ end ~}}
 {{~ # lordのFaction下にアクセス出来ないパターンがあるので触らないよう注意、pawn.profile内にRole: Enemyが含まれているかで敵対判別を代用 ~}}
 {{~ enemy_lord_flag = false ~}}
+{{~ # 人型ポーンの情報を取得 ~}}
 {{~ if lord.ownedPawns.size > 0 ~}}
-{{~ enemy_lord_flag = lord.ownedPawns[0].profile | string.contains "Role: Enemy Group" ~}}
+{{~ for lp in lord.ownedPawns ~}}
+
+{{~ if lp.RaceProps.Humanlike ~}}
+{{~ enemy_lord_flag = lp.profile | string.contains "Role: Enemy Group" ~}}
+{{~ if lp.trader != null ~}}
+{{~ trader_kind = lp.trader.TraderKind.label  ~}}
+{{~ end ~}}
+{{~ end ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ # 一つでも敵対派閥がいるかどうかフラグ ~}}
 {{~ if enemy_lord_flag ~}}
@@ -234,6 +245,9 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
+{{~ end ~}}
+{{~ if trader_kind != "" ~}}
+彼らは{{ trader_kind }}です
 {{~ end ~}}
 {{~ if danger_flag ~}}
 {{~ if enemy_lord_flag ~}}
