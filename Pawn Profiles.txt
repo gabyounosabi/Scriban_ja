@@ -18,6 +18,7 @@
     "毒雨": "屋外では有毒な雨が降っています",
     "盲目の霧": "屋外は濃い霧に包まれています",
     "死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません",
+    "死の灰": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません",
     "強風": "屋外では乾燥した強い風が吹き荒れています",
 } ~}}
 {{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力（非戦闘時のみ、喜びや戦闘に関係ないもの） ~}}
@@ -27,6 +28,7 @@
     "野宿した": "野宿をしました",
     "凍えながら夜を過ごした": "肌寒い環境で夜を過ごしました",
     "腐乱死体を見た": "近くに腐乱死体があり不快",
+    "砂吹雪": "口に砂が入った！",
     "学習への渇望": "この子は色んな事を学びたがっています",
 } ~}}
 {{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力（常時表示、戦闘時にも表示されます） ~}}
@@ -181,7 +183,7 @@
 {{~ # ★外気温チェック（異常な温度の時のみ描写） ~}}
 {{~ map_temp =  pawn.Map.mapTemperature.OutdoorTemp | math.floor ~}}
 {{~ if map_temp <= -74 ~}}
-{{~ else if map_temp >= 40 || map_temp <= -15~}}
+{{~ else if map_temp >= 35 || map_temp <= -10~}}
 外気温:{{ map_temp }}C
 {{~ end ~}}
 {{~ # ★辞書を使い天気、空間を描写 ~}}
@@ -199,6 +201,8 @@
 {{~ trader_kind = "" ~}}
 {{~ # 霧がかかった場合取得しない？かも？~}}
 {{~ if lord.AnyActivePawn ~}}
+{{~ # 特定ジョブの場合除外、今後増えたら辞書化 ~}}
+{{~ if !(lord.LordJob | String.contains "StructureThreatCluster") ~}}
 {{~ alive_lord_flag = false ~}}
 {{~ # lord生存フラグ~}}
 {{~ if lord.numPawnsEverGained != null && lord.numPawnsLostViolently != null ~}}
@@ -211,7 +215,6 @@
 {{~ # 人型ポーンの情報を取得 ~}}
 {{~ if lord.ownedPawns.size > 0 ~}}
 {{~ for lp in lord.ownedPawns ~}}
-
 {{~ if lp.RaceProps.Humanlike ~}}
 {{~ enemy_lord_flag = lp.profile | string.contains "Role: Enemy Group" ~}}
 {{~ if lp.trader != null ~}}
@@ -254,6 +257,7 @@
 {{~ if alive_lord_flag ~}}
 現在{{ lord.numPawnsLostViolently }}体討伐済み
 残り{{ lord.numPawnsEverGained - lord.numPawnsLostViolently }}体です!
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
