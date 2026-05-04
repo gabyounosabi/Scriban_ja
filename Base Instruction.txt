@@ -48,7 +48,7 @@
 {{~ o_faction = p.Faction.Name ~}}
 {{~ end ~}}
 {{~ else ~}}
-{{~ unknown_pawns_name = p.name ~}}
+{{~ unknown_pawns = p.name ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -56,6 +56,7 @@
 {{~ hostile_pawns_name = hostile_pawns | array.join "、" ~}}
 {{~ ally_pawns_name = ally_pawns | array.join "、" ~}}
 {{~ other_pawns_name = other_pawns | array.join "、" ~}}
+{{~ unknown_pawns_name = unknown_pawns | array.join "、" ~}}
 {{~ combat_pawns_name = combat_pawns | array.join "、" ~}}
 {{~ if player_pawns_name != "" ~}}
 {{~ p_text = "、プレイヤー派閥のメンバー【"+ player_pawns_name + "】"~}}
