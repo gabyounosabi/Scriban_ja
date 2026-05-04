@@ -16,6 +16,7 @@
 {{~ # ★ポーンループ ~}}
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
+{{~ if p.Faction != null ~}}
 {{~ if p.Faction.IsPlayer ~}}
 {{~ # ★攻撃、被弾時刻取得 ~}}
 {{~ latest_tick = 99999 ~}}
@@ -46,6 +47,9 @@
 {{~ other_pawns = other_pawns | array.add p.name ~}}
 {{~ o_faction = p.Faction.Name ~}}
 {{~ end ~}}
+{{~ else ~}}
+{{~ unknown_pawns_name = p.name ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ player_pawns_name = player_pawns | array.join "、" ~}}
@@ -65,6 +69,9 @@
 {{~ if other_pawns_name != "" ~}}
 {{~ o_text = "、中立派閥のメンバー（NPC）【"+ other_pawns_name + "】"~}}
 {{~ end ~}}
+{{~ if unknown_pawns_name != "" ~}}
+{{~ u_text = "、派閥不明のNPC【"+ unknown_pawns_name + "】"~}}
+{{~ end ~}}
 {{~ if danger_flag == true ~}}
 {{~ if combat_pawns_name != "" ~}}
 {{~ combat_text =  combat_pawns_name + "は現在戦闘中です！" ~}}
@@ -72,8 +79,10 @@
 {{~ end ~}}
 {{~ # ▼結合後プロンプト ~}}
 あなたはRimworldにおける架空キャラのロールプレイAIです。以下に提供される
-情報を背景とし{{ p_text }}{{ h_text }}{{ a_text }}{{ o_text }}の会話を生成してください。
+情報を背景とし{{ p_text }}{{ h_text }}{{ a_text }}{{ o_text }}{{ u_text }}の会話を生成してください。
+{{~ if combat_text != null ~}}
 {{ combat_text }}
+{{~ end ~}}
 {{~ # ▼自派閥の目標設定（たまに出力して常時この話をしないように） ~}}
 {{~ if (Find.TickManager.TicksGame % 10) == 0 && Find.FactionManager.OfPlayer.HasName ~}}
 {{~ if player_pawns_name != "" ~}}
