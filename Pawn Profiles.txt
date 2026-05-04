@@ -98,8 +98,9 @@
 "AssaultColony": "から襲撃を受けています！",
 "AssistColony": "の援軍が助けに来ています。彼らは同盟派閥です",
 "VisitColony": "訪問者が訪れています",
-"SleepThenMechanoidsDefend": "のメカノイドが近くにいます",
+
 "MechanoidsDefend": "のメカノイドが近くにいます",
+"SleepThenMechanoidsDefend": "のメカノイドが休眠状態で近くにいます",
 "HiveQueen": "　この地底には人を襲う恐ろしい虫たちが巣食っています",
 "CreepJoiner": "怪しい雰囲気の人間が来ています",
 "ShamblerSwarm": "恐ろしい歩く死体が拠点の付近をうろついています",
