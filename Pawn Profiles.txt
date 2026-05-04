@@ -1,117 +1,127 @@
 {{~ # 使用の際は新しくエントリを作成し、Base Instructionの下（JSON Formatを使っている場合はその下）に設置する。Pawn Profilesは削除かオフにする。また、コンテキストフィルターのポーン情報、環境は全てONにする（OFFだとRimtalk独自プロパティが取得出来ない、） ~}}
 {{~ # ▼辞書セット、自環境に合わせてここを編集▼ ~}}
-{{~ # ▼補足情報辞書、keyが話題、ジョブ、インシデント内に含まれている場合、補足情報としてvalueを出力 ~}}
+{{~ # ▼補足情報辞書、keyが話題やjobに含まれている場合、補足情報としてvalueを出力 ~}}
 {{~ tips_map = {
-    "サイトスティーラー": "サイトスティーラーは姿を消せる異形生命体です",
-    "木材を精製中": "木材は精製するとバイオ液化燃料になります",
+"サイトスティーラー": "サイトスティーラーは姿を消せる異形生命体です",
+"タフスパイク":"タフスパイクは棘を飛ばしてくる人サイズのおぞましい肉塊の化物です、分裂する可能性もあります",
+"トライスパイク": "トライスパイクは棘を飛ばしてくるおぞましい肉塊の化物です、分裂する可能性もあります",
+"フィンガースパイク": "フィンガースパイクは棘を飛ばしてくる小さくもおぞましい肉塊の化物です",
+"木材を精製中": "木材は精製するとバイオ液化燃料になります",
 } ~}}
 {{~ # ▼表示したい天気、天候がkeyの場合valueを出力、開発者モードのChange weatherで大体の天気を確認可能 ~}}
 {{~ weather_map = {
-    "軌道上": "軌道上にいます",
-    "地底": "地底にいます",
-    "地下洞窟": "地下洞窟にいます",
-    "施設内": "施設内にいます",
-    "不自然な闇": "屋外は異形が生み出した不自然な闇で何も見えません、人々は不安を抱えます",
-    "砂嵐": "屋外では砂嵐が吹き荒れています",
-    "血の雨": "屋外では生物が凶暴化してしまう血の雨が降っています",
-    "吹雪": "屋外では吹雪が吹き荒れています",
-    "毒雨": "屋外では有毒な雨が降っています",
-    "盲目の霧": "屋外は濃い霧に包まれています",
-    "死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません",
-    "死の灰": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません",
-    "強風": "屋外では乾燥した強い風が吹き荒れています",
+"軌道上": "軌道上にいます",
+"地底": "地底にいます",
+"地下洞窟": "地下洞窟にいます",
+"施設内": "施設内にいます",
+"不自然な闇": "屋外は異形が生み出した不自然な闇で何も見えません、人々は不安を抱えます",
+"砂嵐": "屋外では砂嵐が吹き荒れています",
+"血の雨": "屋外では生物が凶暴化してしまう血の雨が降っています",
+"吹雪": "屋外では吹雪が吹き荒れています",
+"大雪": "屋外では大雪が降っています",
+"毒雨": "屋外では有毒な雨が降っています",
+"盲目の霧": "屋外は濃い霧に包まれています",
+"死の帳": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません",
+"死の灰": "屋外は有害な化学物質を含んだ空気に包まれ人が過ごせる環境ではありません",
+"強風": "屋外では乾燥した強い風が吹き荒れています",
 } ~}}
-{{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力（非戦闘時のみ、喜びや戦闘に関係ないもの） ~}}
+{{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力（非戦闘時のみ、喜びや戦闘に関係ないもの、毎回言及しないように抽選3割で表示） ~}}
 {{~ thought_conditions = {
-    "弁当を食べた": "美味しいお弁当を食べて喜んでいます",
-    "夜のよたか": "現在時刻は夜です",
-    "野宿した": "野宿をしました",
-    "凍えながら夜を過ごした": "肌寒い環境で夜を過ごしました",
-    "腐乱死体を見た": "近くに腐乱死体があり不快",
-    "砂吹雪": "口に砂が入った！",
-    "学習への渇望": "この子は色んな事を学びたがっています",
+"弁当を食べた": "美味しいお弁当を食べて喜んでいます",
+"ハンバーガーを食べた": "豪華なハンバーガーを食べて幸せです",
+"夜のよたか": "現在時刻は夜です",
+"野宿した": "野宿をしました",
+"凍えながら夜を過ごした": "肌寒い環境で夜を過ごしました",
+"腐乱死体を見た": "近くに腐乱死体があり不快",
+"砂吹雪": "口に砂が入った！",
+"学習への渇望": "この子は色んな事を学びたがっています",
 } ~}}
 {{~ # ▼表示したい欲求、keyが欲求タブにある場合valueを出力（常時表示、戦闘時にも表示されます） ~}}
 {{~ battle_thought_conditions = {
-    "ひどい栄養失調": "十分な栄養が摂れておらず活動に支障が出ています",
-    "飢餓": "餓死寸前で呂律すら回りません",
-    "激しい痛み": "気絶する程の痛みを感じています",
-    "気が遠くなる痛み": "死を覚悟する程の痛みを感じています",
+"ひどい栄養失調": "十分な栄養が摂れておらず活動に支障が出ています",
+"飢餓": "餓死寸前で呂律すら回りません",
+"激しい痛み": "気絶する程の痛みを感じています",
+"気が遠くなる痛み": "死を覚悟する程の痛みを感じています",
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みが強い場合のみ） ~}}
 {{~ health_conditions = {
-    "傷からの感染症": "傷から発症した感染症で苦しんでいます",
-    "機械化": "筋繊維機械化症により精密な動きが出来る代わりに少し痛みを感じています",
-    "打撲": "打撲により苦しんでいます",
-    "刺し傷": "刺し傷により苦しんでいます",
-    "切創": "切創により苦しんでいます",
-    "噛み傷": "噛み傷により苦しんでいます",
-    "凍傷":"凍傷で苦しんでいます",
-    "銃創": "銃創により苦しんでいます",
-    "ビーム熱傷":"レーザー攻撃による火傷を負っています",
+"傷からの感染症": "傷から発症した感染症で苦しんでいます",
+"回虫": "消化器の寄生虫によって苦しんでいます",
+"機械化": "筋繊維機械化症により精密な動きが出来る代わりに少し痛みを感じています",
+"打撲": "打撲により苦しんでいます",
+"裂傷": "裂傷により苦しんでいます",
+"刺し傷": "刺し傷により苦しんでいます",
+"切創": "切創により苦しんでいます",
+"噛み傷": "噛み傷により苦しんでいます",
+"凍傷":"凍傷で苦しんでいます",
+"銃創": "銃創により苦しんでいます",
+"ビーム熱傷":"レーザー攻撃による火傷を負っています",
 } ~}}
 {{~ # ▼表示したい健康情報、keyが健康タブにある場合valueを出力（痛みに関係なく常に表示） ~}}
 {{~ status_conditions = {
-    "低体温症": "外気や場所によって体温が下がり寒がっています",
-    "食中毒": "食中毒で苦しんでいます",
-    "スカリア感染": "放置すると凶暴化する可能性があるスカリアという細菌に感染しています",
-    "ゴージュースによる興奮": "ゴージュースという戦闘用に開発された薬物を飲み興奮状態です",
+"低体温症": "外気や場所によって体温が下がり寒がっています",
+"食中毒": "食中毒で苦しんでいます",
+"スカリア感染": "放置すると凶暴化する可能性があるスカリアという細菌に感染しています",
+"ゴージュースによる興奮": "ゴージュースという戦闘用に開発された薬物を飲み興奮状態です",
 } ~}}
 {{~ # ▼戦闘時のみ表示したい健康情報、keyが健康タブにある場合valueを出力（痛みに関係なく常に表示） ~}}
 {{~ battle_status_conditions = {
-    "強化視覚センサー": "高性能な視覚センサーを備えています",
-    "制御不能な触手": "種族特有の触手が体から生えています",
-    "再生": "種族特有の自己再生能力があります",
+"強化視覚センサー": "高性能な視覚センサーを備えています",
+"制御不能な触手": "種族特有の触手が体から生えています",
+"再生": "種族特有の自己再生能力があります",
 } ~}}
 {{~ # ▼置換、非表示にしたい特性情報、keyが特性欄にある場合、valueに置換する ~}}
 {{~ ability_conditions = {
-    "よたか": "夜に活動するのが好き",
-    "歓喜": "みんなに愛される存在",
-    "苦悩する芸術家": "独特な芸術観",
-    "ドラッグ常用者": "",
-    "気持ち悪い息づかい": "コミュ障",
-    "うぬぼれ屋": "自信家",
+"よたか": "夜に活動するのが好き",
+"歓喜": "みんなに愛される存在",
+"苦悩する芸術家": "独特な芸術観",
+"ドラッグ常用者": "",
+"気持ち悪い息づかい": "コミュ障",
+"うぬぼれ屋": "自信家",
+"地底人": "インドア派",
 } ~}}
 {{~ # ▼心情用辞書 ~}}
 {{~ mood_map = {
-    "幸せ": "幸せに過ごしています",
-    "満足": "現状に満足しています",
-    "普通": "精神状態は安定しています",
-    "ストレス気味": "ほんの少し現状に不満があるようです",
-    "不安": "ストレスを抱えているようです",
-    "崩壊寸前": "精神状態は限界に達しており崩壊寸前です",
+"幸せ": "幸せに過ごしています",
+"満足": "現状に満足しています",
+"普通": "精神状態は安定しています",
+"ストレス気味": "ほんの少し現状に不満があるようです",
+"不安": "ストレスを抱えているようです",
+"崩壊寸前": "精神状態は限界に達しており崩壊寸前です",
 } ~}}
 {{~ # ▼表示したい外部ポーン情報、keyがlordjobにある場合valueを出力 ~}}
 {{~ lord_name = {
-    "BegForItems": "から慈悲を求める乞食達が訪れています",
-    "TradeWithColony": "からトレーダーが訪れています",
-    "StageThenAttack": "が襲撃準備をしています",
-    "AssaultColony": "から襲撃を受けています！",
-    "AssistColony": "同盟派閥の援軍が助けに来ています",
-    "VisitColony": "訪問者が訪れています",
-    "SleepThenMechanoidsDefend": "敵対的なメカノイドが近くにいます",
-    "MechanoidsDefend": "のメカノイドが近くにいます",
-    "CreepJoiner": "怪しい雰囲気の人間が来ています",
-    "ShamblerSwarm": "恐ろしい歩く死体が拠点の付近をうろついています",
+"BegForItems": "から慈悲を求める乞食達が訪れています",
+"DefendBase": "は防衛を行っています、襲撃のチャンスです！",
+"TradeWithColony": "からトレーダーが訪れています",
+"StageThenAttack": "が襲撃準備をしています",
+"AssaultColony": "から襲撃を受けています！",
+"AssistColony": "の援軍が助けに来ています。彼らは同盟派閥です",
+"VisitColony": "訪問者が訪れています",
+"SleepThenMechanoidsDefend": "のメカノイドが近くにいます",
+"MechanoidsDefend": "のメカノイドが近くにいます",
+"HiveQueen": "　この地底には人を襲う恐ろしい虫たちが巣食っています",
+"CreepJoiner": "怪しい雰囲気の人間が来ています",
+"ShamblerSwarm": "恐ろしい歩く死体が拠点の付近をうろついています",
 } ~}}
 {{~ # ▼表示したい外部ポーン情報、keyがlordjobにある場合valueを出力、ポーン個人用 ~}}
 {{~ lord_name_for_pawn = {
-    "BegForItems": "物乞いをしています",
-    "TradeWithColony": "トレーダーとして訪れています",
-    "StageThenAttack": "襲撃準備をしています",
-    "AssaultColony": "襲撃を行っています！",
-    "AssistColony": "援軍として訪れています",
-    "VisitColony": "訪問者として訪れています",
-    "CreepJoiner": "怪しい雰囲気を纏いつつ、入植者に言いたいことがあるようです",
+"BegForItems": "物乞いをしています",
+"TradeWithColony": "トレーダーとして訪れています",
+"StageThenAttack": "襲撃準備をしています",
+"AssaultColony": "襲撃を行っています！",
+"AssistColony": "援軍として訪れています",
+"VisitColony": "訪問者として訪れています",
+"CreepJoiner": "怪しい雰囲気を纏いつつ、入植者に言いたいことがあるようです",
 } ~}}
 {{~ # ▼表示したい外部ポーン情報、keyがCurLordToilにある場合valueを出力 ~}}
 {{~ toil_name = {
-    "Breaching": "建物を全て破壊するつもりのようです",
-    "Sappers": "壁を破壊し侵入経路を作るつもりのようです",
-    "AssaultColony": "侵攻されています！",
+"AssaultColony": "侵攻されています！",
+"Breaching": "建物を全て破壊するつもりのようです",
+"Sappers": "壁を破壊し侵入経路を作るつもりのようです",
 } ~}}
 {{~ # ■世界情報整理■ ~}}
-{{~ # ■tips確認用配列、判定したい対象を適宜ここに入れていく ~}}
+{{~ # ■tips確認用配列、判定したい対象を適宜ここに入れていく（装備武器、ヒト狩り動物の名前、job内容、ポーン同士の話題） ~}}
 {{~ tips_check_list = [] ~}}
 {{~ # ■話題ポーン格納用配列 ~}}
 {{~ pawn_name_history = [] ~}}
@@ -124,7 +134,7 @@
 {{~ pawns_string = pawns | array.join "、" ~}}
 {{~ # ■ヒト狩り動物文字列 ~}}
 {{~ manhunter_name = "" ~}}
-{{~ # ■全世界の死亡ポーン、処理が重いのは7割これのせい ~}}
+{{~ # ■全世界の死亡ポーン、将来的に重いかも ~}}
 {{~ all_pawns = PawnsFinder.All_AliveOrDead ~}}
 {{~ d_pawns = [] ~}}
 {{~ for all_pawn in all_pawns ~}}
@@ -147,8 +157,10 @@
 {{~ has_player_pawn = false ~}}
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
+{{~ if p.Faction != null ~}}
 {{~ if p.Faction.IsPlayer ~}}
 {{~ has_player_pawn = true ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -193,18 +205,19 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ■現在マップにおけるポーン集団の目的、会話ポーンに自ポーンがいる時のみ表示 ~}}
+{{~ lord_map = {} ~}}
 {{~ if has_player_pawn == true ~}}
-{{~ if pawn.map.lordmanager.lords | array.size > 0  }}
-周囲の状況
+{{~ if pawn.map.lordmanager.lords | array.size > 0 ~}}
 {{~ for lord in pawn.map.lordmanager.lords ~}}
 {{~ # トレーダー種別 ~}}
 {{~ trader_kind = "" ~}}
-{{~ # 霧がかかった場合取得しない？かも？~}}
+{{~ # 遺跡内等の非アクティブポーンかどうか ~}}
 {{~ if lord.AnyActivePawn ~}}
 {{~ # 特定ジョブの場合除外、今後増えたら辞書化 ~}}
-{{~ if !(lord.LordJob | String.contains "StructureThreatCluster") ~}}
+{{~ # 巣を守る虫とポッド内のメカノイドを除外 ~}}
+{{~ if !(lord.LordJob | String.contains "StructureThreatCluster") && !(lord.LordJob | String.contains "DefendAndExpandHive") ~}}
 {{~ alive_lord_flag = false ~}}
-{{~ # lord生存フラグ~}}
+{{~ # lord生存フラグ ~}}
 {{~ if lord.numPawnsEverGained != null && lord.numPawnsLostViolently != null ~}}
 {{~ if (lord.numPawnsEverGained - lord.numPawnsLostViolently) > 0 ~}}
 {{~ alive_lord_flag = true ~}}
@@ -212,13 +225,15 @@
 {{~ end ~}}
 {{~ # lordのFaction下にアクセス出来ないパターンがあるので触らないよう注意、pawn.profile内にRole: Enemyが含まれているかで敵対判別を代用 ~}}
 {{~ enemy_lord_flag = false ~}}
-{{~ # 人型ポーンの情報を取得 ~}}
+{{~ # ポーンの情報を取得 ~}}
 {{~ if lord.ownedPawns.size > 0 ~}}
 {{~ for lp in lord.ownedPawns ~}}
-{{~ if lp.RaceProps.Humanlike ~}}
+{{~ if enemy_lord_flag == false ~}}
 {{~ enemy_lord_flag = lp.profile | string.contains "Role: Enemy Group" ~}}
+{{~ end ~}}
 {{~ if lp.trader != null ~}}
-{{~ trader_kind = lp.trader.TraderKind.label  ~}}
+{{~ if trader_kind == "" ~}}
+{{~ trader_kind = lp.trader.traderKind.label  ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -227,41 +242,71 @@
 {{~ if enemy_lord_flag ~}}
 {{~ hostile_lords_flag = true ~}}
 {{~ end ~}}
-{{~ # ★ポーン集団出力開始 ~}}
-{{~ if lord.faction != "" ~}}
-{{~ if alive_lord_flag ~}}
-
-派閥:{{~ lord.faction ~}}
+{{~ # danger_flagがfalseなのに敵がいる場合フラグ（敵が視認出来ていない状態） ~}}
+{{~ if danger_flag == false && enemy_lord_flag == true ~}}
+{{~ hide_lord_flag = true ~}}
 {{~ end ~}}
+{{~ # ★ポーン集団出力開始 ~}}
+{{~ if lord.faction != "" && lord.faction != null ~}}
+{{~ if alive_lord_flag ~}}
+{{~ if !already_show ~}}
+周囲の状況
+{{~ already_show = true ~}}
+{{~ end ~}}
+{{~ # 辞書を作り整形しつつ、後で一覧を表示する ~}}
+{{~ if lord_map[lord.faction] == null ~}}
+{{~ lord_map[lord.faction] = {} ~}}
+{{~ # 初登場派閥の場合 ~}}
+{{~ lord_map[lord.faction].numPawnsEverGained = lord.numPawnsEverGained ~}}
+{{~ lord_map[lord.faction].numPawnsLostViolently = lord.numPawnsLostViolently ~}}
+{{~ else ~}}
+{{~ # 既出派閥の場合、ポーンの数をまとめる、lordjobとtoilは最後の物になる ~}}
+{{~ lord_map[lord.faction].numPawnsEverGained = lord_map[lord.faction].numPawnsEverGained + lord.numPawnsEverGained ~}}
+{{~ lord_map[lord.faction].numPawnsLostViolently = lord_map[lord.faction].numPawnsLostViolently + lord.numPawnsLostViolently ~}}
+{{~ end ~}}
+{{~ # フラグ情報を追加 ~}}
+{{~ lord_map[lord.faction].alive_lord_flag = alive_lord_flag ~}}
+{{~ lord_map[lord.faction].enemy_lord_flag = enemy_lord_flag ~}}
 {{~ for ln in lord_name ~}}
 {{~ # 辞書にあるlordjobは詳細を表示 ~}}
 {{~ if lord.LordJob | string.contains ln.key ~}}
-{{~ if alive_lord_flag ~}}
-{{ ln.value }}
-{{~ end ~}}
+{{~ lord_map[lord.faction].LordJob = ln.value ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ for tn in toil_name ~}}
 {{~ if lord.CurLordToil | string.contains tn.key ~}}
-{{~ if alive_lord_flag ~}}
-{{ tn.value }}
+{{~ lord_map[lord.faction].CurLordToil = tn.value ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ if trader_kind != "" ~}}
-彼らは{{ trader_kind }}です
-{{~ end ~}}
-{{~ if danger_flag ~}}
-{{~ if enemy_lord_flag ~}}
-{{~ if alive_lord_flag ~}}
-現在{{ lord.numPawnsLostViolently }}体討伐済み
-残り{{ lord.numPawnsEverGained - lord.numPawnsLostViolently }}体です!
+{{~ lord_map[lord.faction].trader_kind = trader_kind ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
+{{~ end ~}}
+{{~ # 辞書内容表示 ~}}
+{{~ for lm in lord_map ~}}
+
+派閥{{~ lm.key ~}}
+{{~ if lm.value.lordjob != null ~}}
+{{ lm.value.lordjob }}
+{{~ end ~}}
+{{~ if lm.value.CurLordToil != null ~}}
+{{ lm.value.CurLordToil }}
+{{~ end ~}}
+{{~ if lm.value.trader_kind && lm.value.trader_kind != "" ~}}
+彼らは{{ lm.value.trader_kind }}です
+{{~ end ~}}
+{{~ if danger_flag && lm.value.enemy_lord_flag && lm.value.alive_lord_flag ~}}
+{{~ if lm.value.numPawnsLostViolently != null ~}}
+現在{{ lm.value.numPawnsLostViolently }}体討伐済み
+{{~ end ~}}
+{{~ if lm.value.numPawnsEverGained != null && lm.value.numPawnsLostViolently != null ~}}
+残り{{ lm.value.numPawnsEverGained - lm.value.numPawnsLostViolently }}体です！
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -274,17 +319,21 @@
 {{~ pawns_fine = pawns_fine | array.add h_pawn ~}}
 {{~ end ~}}
 {{~ end ~}}
-{{ # 敵対派閥の集団が一つでもある場合}}
+{{~ # 敵対派閥の集団が一つでもある場合 ~}}
 {{~ if hostile_lords_flag ~}}
-プレイヤー派閥である{{player_faction_name}}の全メンバーは{{player_pawns_humanlike.size}}名
+{{~ if !hide_lord_flag ~}}
+プレイヤー派閥である{{ player_faction_name }}の全メンバーは{{ player_pawns_humanlike.size }}名
 {{~ if pawn_downed_flag ~}}
-動けるメンバーは残り{{pawns_fine.size}}名です
+動けるメンバーは残り{{ pawns_fine.size }}名です
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ # ★ポーン取得ループ開始 ~}}
 {{~ for p in pawns ~}}
 {{~ if p.RaceProps.Humanlike ~}}
 {{~ # ■ポーン情報整理■ ~}}
+{{~ # ■ポーンが派閥に属していない場合仮派閥を設定（null対策） ~}}
+{{~ if p.Faction != null ~}}
 {{~ # ■ポーン派閥名 ~}}
 {{~ pawn_faciton_name = p.Faction.Name ~}}
 {{~ # ■ポーンがプレイヤー派閥かどうか ~}}
@@ -293,6 +342,16 @@
 {{~ is_ally_pawn = !is_player_pawn && p.Faction.PlayerRelationKind == "Ally" ~}}
 {{~ # ■ポーンが敵対派閥かどうか ~}}
 {{~ is_hostile_pawn = !is_player_pawn && p.Faction.PlayerRelationKind == "Hostile" ~}}
+{{~ else ~}}
+{{~ # ■ポーン派閥名 ~}}
+{{~ pawn_faciton_name = "未所属" ~}}
+{{~ # ■ポーンがプレイヤー派閥かどうか ~}}
+{{~ is_player_pawn = false ~}}
+{{~ # ■ポーンが同盟派閥かどうか ~}}
+{{~ is_ally_pawn = false ~}}
+{{~ # ■ポーンが敵対派閥かどうか ~}}
+{{~ is_hostile_pawn = false ~}}
+{{~ end ~}}
 {{~ # ■ポーンが戦闘中かどうか ~}}
 {{~ is_combat = false ~}}
 {{~ # ■fullthoughtが安全に使用出来るかフラグ ~}}
@@ -332,7 +391,10 @@
 {{~ end ~}}
 {{~ # ★設定されたペルソナ ~}}
 {{ p.personality }}
+{{~ # tips確認用配列にペルソナを追加 ~}}
+{{~ tips_check_list = tips_check_list | array.add p.personality ~}}
 {{~ # ★派閥によって台詞を調整 ~}}
+{{~ if p.Faction != null ~}}
 {{~ if is_player_pawn && p.Faction.hasname ~}}
 派閥:{{ p.Faction.Name }}
 {{~ else if is_player_pawn ~}}
@@ -344,6 +406,7 @@
 {{ Find.FactionManager.OfPlayer.Name }}の人間に対し友好的な言葉を投げかけます
 {{~ else ~}}
 派閥:{{ p.Faction.Name }}（中立）
+{{~ end ~}}
 {{~ end ~}}
 {{~ # ★ポーンの目的 ~}}
 {{~ if !(is_player_pawn) ~}}
@@ -433,10 +496,12 @@
 心情:{{ mood.value }}
 {{~ end ~}}
 {{~ end ~}}
-{{~ # ★辞書を使い欲求を描写（入植者のみ） ~}}
+{{~ # ★辞書を使い欲求を描写（入植者のみ、抽選形式で3割程度） ~}}
 {{~ for thought_condition in thought_conditions ~}}
+{{~ if ( for.index * 137 + Find.TickManager.TicksGame ) % 100 < 30 ~}}
 {{~ if p.fullthought | string.contains thought_condition.key ~}}
 {{ thought_condition.value }}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ else ~}}
@@ -552,10 +617,6 @@
 {{~ else if formatted_job | string.contains "うろうろしている" ~}}
 {{~ if is_player_pawn ~}}
 現在の行動:次にやることを探している
-{{~ else if p.kindDef.defName == "Beggar" ~}}
-現在の行動:自らの境遇で同情を誘い、{{ player_faction_name }}の人間に対して物乞いをしています
-{{~ else if p.Faction.def.defName == "Enpire" ~}}
-現在の行動:自分達の帝国領との差を誇示しながら、{{ player_faction_name }}の拠点を品定めしています
 {{~ end ~}}
 {{~ else ~}}
 現在の行動:{{ formatted_job }}
@@ -582,11 +643,18 @@
 
 {{~ # tips確認用配列と結合 ~}}
 {{~ tips_check_list = tips_check_list | array.concat all_jobs_and_incident ~}}
-{{~ #★tips確認用配列に辞書内容が含まれていた場合valueを出力 ~}}
+{{~ # 出力済みkeyを記録する配列を初期化 ~}}
+{{~ output_keys = [] ~}}
+{{~ # tips確認用配列に辞書内容が含まれていた場合valueを出力 ~}}
 {{~ for t_list in tips_check_list ~}}
 {{~ for tip in tips_map ~}}
 {{~ if t_list | string.contains tip.key ~}}
+{{~ # まだ出力していないkeyかチェック ~}}
+{{~ if !(output_keys | array.contains tip.key) ~}}
 {{ tip.value }}
+{{~ # 出力済みとして記録 ~}}
+{{~ output_keys = output_keys | array.add tip.key ~}}
+{{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
@@ -608,8 +676,8 @@
 {{~ if !already_exists ~}}
 {{~ pawn_name_history = pawn_name_history | array.add target_pawn.name ~}}
 {{~ # 対象ポーンが派閥を持っているか（独自プロパティ参照） ~}}
-{{~ # シャンブラーやMOD種族等のFaction以下にアクセスしようとするとnullすら返らない時があるので注意 ~}}
-{{~ if target_pawn.faction != "" ~}}
+{{~ # シャンブラーやMOD種族等のFaction以下にアクセスしようとするとnullが返る時があるので注意 ~}}
+{{~ if target_pawn.faction != "" && target_pawn.faction != null ~}}
 {{~ if target_pawn.RaceProps.Humanlike ~}}
 {{~ if target_pawn.Faction.isPlayer ~}}
 {{ target_pawn.name }}はプレイヤー派閥所属の人名
@@ -679,13 +747,12 @@
 {{~ end ~}}
 {{~ end ~}}
 {{~ end ~}}
-
 {{~ # ▼直近の会話 ~}}
 {{~ if chat.history | string.contains "name" ~}}
+
 直近の会話履歴
 {{~ history = chat.history | string.split "text=" | array.last ~}}
 {{~ history ~}}
 {{~ end ~}}
-
 
 上記を踏まえ{{ pawns_string }}の新しい会話を生成してください
