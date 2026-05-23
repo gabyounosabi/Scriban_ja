@@ -144,7 +144,7 @@
 "AssistColony": "の援軍が助けに来ています。彼らは同盟派閥です",
 "LordJob_AssaultThings": "から襲撃を受けています！対象を守りきってください！",
 "VisitColony": "訪問者が訪れています",
-"LordJob_MechanoidsDefend": "の危険なメカノイドが近くにいます",
+"LordJob_MechanoidsDefend": "のメカノイドが近くにいます",
 "LordJob_SleepThenMechanoidsDefend": "の危険なメカノイドが休眠状態で近くにいます",
 "HiveQueen": "　この地底には人を襲う恐ろしい虫たちが巣食っています",
 "CreepJoiner": "怪しい雰囲気の人間が来ています",
