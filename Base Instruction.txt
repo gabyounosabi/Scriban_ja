@@ -13,7 +13,10 @@
       
       is_combat = false
       is_drafted = false
-
+      latest_harm_tick = null
+      latest_attack_tick = null
+      latest_combat_tick = null
+      last_combat_tick = null
 
       # 派閥を持っているか
       has_faction = false
@@ -41,37 +44,64 @@
           other_pawns = other_pawns | array.add p.name
         end
 
-        # 戦闘中か？狩りの場合でも反応するので注意、プレイヤー派閥の場合のみ取得
+        # 狩りの場合でも反応するので注意、プレイヤー派閥の場合のみ取得
         if p.Faction.IsPlayer
-          latest_tick = 99999
-          if p.mindState.lastRangedHarmTick != 0
-            latest_tick = p.mindState.lastRangedHarmTick
-          end
 
-          if p.mindState.lastMeleeThreatHarmTick != 0
-            if latest_tick > p.mindState.lastMeleeThreatHarmTick
-              latest_tick = p.mindState.lastMeleeThreatHarmTick
+          
+          # 戦闘中か？danger_flagがtrueの時のみ実行（狩り中でも反応してしまうため）
+          if danger_flag
+
+            # 敵は0が初期値、味方は-99999が初期値
+            if p.mindState.lastRangedHarmTick != 0 && p.mindState.lastRangedHarmTick != -99999
+              latest_harm_tick = p.mindState.lastRangedHarmTick
             end
-          end
 
-          # 徴兵されているか
-          is_drafted = false
-          if p.Drafted
-            is_drafted = true
-          end
+            # -99999が初期値
+            if p.mindState.lastMeleeThreatHarmTick != -99999
+              # latest_harm_tickがnullでないなら比較して大きい方で更新
+              if latest_harm_tick
+                if latest_harm_tick < p.mindState.lastMeleeThreatHarmTick
+                  latest_harm_tick = p.mindState.lastMeleeThreatHarmTick
+                end
+              else
+                latest_harm_tick = p.mindState.lastMeleeThreatHarmTick
+              end
+            end
 
-          # ゲーム内で4時間以内に攻撃被弾していた場合
-          
-          
-          if latest_tick != 99999
-            last_attack_tick = Find.tickmanager.ticksgame - p.mindState.lastAttackTargetTick
-            last_harm_tick = Find.tickmanager.ticksgame - latest_tick
-            if last_attack_tick < 5000 || last_harm_tick < 5000
-              is_combat = true      
-            else if last_attack_tick < 50000 || last_harm_tick < 50000
-              is_combat = true
-            else
-              is_combat = false
+            # -99999が初期値
+            if p.mindState.lastAttackTargetTick != -99999
+              latest_attack_tick = p.mindState.lastAttackTargetTick
+            end
+
+            # RangeもMeleeもnullでないなら比較、片方がnullなら存在する方でlast_combat_tickを更新
+            if latest_harm_tick != null && latest_attack_tick != null
+              if latest_harm_tick > latest_attack_tick
+                latest_combat_tick = latest_attack_tick
+              else
+                latest_combat_tick = latest_harm_tick
+              end
+            else if latest_harm_tick != null
+              latest_combat_tick = latest_harm_tick
+            else if latest_attack_tick != null
+              latest_combat_tick = latest_attack_tick
+            end
+
+
+            # ゲーム内で2時間以内に攻撃被弾していた場合
+            if latest_combat_tick != null
+              last_combat_tick = Find.tickmanager.ticksgame - latest_combat_tick
+              
+              if last_combat_tick < 5000
+                
+                is_combat = true
+                combat_text = "現在戦闘中です！"
+              else if last_combat_tick < 50000
+                is_combat = true
+                combat_text = "戦闘状態を継続中です"
+              else
+                is_combat = false
+                combat_text = "非戦闘状態です"
+              end
             end
           end
         end
@@ -140,5 +170,5 @@ JSONL: {"name": "キャラ名", "text": "台詞"}
 
 制約
 - 日本語のみ
-- 1~2台詞、300文字程度
+- 1人あたり1台詞、100字程度
 - 年齢・性別に応じた口調
