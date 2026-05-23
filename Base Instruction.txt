@@ -1,94 +1,131 @@
-{{~ # Base Instructionのサンプル ~}}
-{{~ player_pawns = [] ~}}
-{{~ hostile_pawns = [] ~}}
-{{~ ally_pawns = [] ~}}
-{{~ other_pawns = [] ~}}
-{{~ # ■初期化 ~}}
-{{~ p_faction = Find.FactionManager.OfPlayer.Name ~}}
-{{~ h_faction = "" ~}}
-{{~ a_faction = "" ~}}
-{{~ o_faction = "" ~}}
-{{~ # ■周囲に敵対派閥がいるかどうか ~}}
-{{~ danger_flag = false ~}}
-{{~ if pawn.map.dangerWatcher.DangerRating | string.contains "High" || pawn.map.dangerWatcher.DangerRating | string.contains "Low" ~}}
-{{~ danger_flag = true ~}}
-{{~ end ~}}
-{{~ # ★ポーンループ ~}}
-{{~ for p in pawns ~}}
-{{~ if p.RaceProps.Humanlike ~}}
-{{~ if p.Faction != null ~}}
-{{~ if p.Faction.IsPlayer ~}}
-{{~ # ★攻撃、被弾時刻取得 ~}}
-{{~ latest_tick = 99999 ~}}
-{{~ if p.mindState.lastRangedHarmTick != 0 ~}}
-{{~ latest_tick = p.mindState.lastRangedHarmTick ~}}
-{{~ end ~}}
-{{~ if p.mindState.lastMeleeThreatHarmTick != 0 ~}}
-{{~ if latest_tick > p.mindState.lastRangedHarmTick ~}}
-{{~ latest_tick = p.mindState.lastRangedHarmTick ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ★ゲーム内で1時間以内に攻撃被弾していた場合 ~}}
-{{~ if latest_tick != 99999 ~}}
-{{~ last_attack_tick = Find.tickmanager.ticksgame - p.mindState.lastAttackTargetTick ~}}
-{{~ last_harm_tick = Find.tickmanager.ticksgame - latest_tick ~}}
-{{~ if  last_attack_tick < 2500 || last_harm_tick < 2500 ~}}
-{{~ combat_pawns = combat_pawns | array.add p.name ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ player_pawns = player_pawns | array.add p.name ~}}
-{{~ else if p.Faction.PlayerRelationKind == "Hostile" ~}}
-{{~ hostile_pawns = hostile_pawns | array.add p.name ~}}
-{{~ h_faction = p.Faction.Name ~}}
-{{~ else if p.Faction.PlayerRelationKind == "Ally" ~}}
-{{~ ally_pawns = ally_pawns | array.add p.name ~}}
-{{~ a_faction = p.Faction.Name ~}}
+{{~ # --- 整形部分 --- ~}}
+{{~
+
+  # 初期化
+  danger_flag = false
+  if pawn.Map.dangerWatcher.DangerRating == "High" || pawn.Map.dangerWatcher.DangerRating == "Low"
+    danger_flag = true
+  end
+
+  # ポーン毎の戦闘情報を取得するためポーンループ
+  for p in pawns
+    if p != null
+      
+      is_combat = false
+      is_drafted = false
+
+
+      # 派閥を持っているか
+      has_faction = false
+      if p.Faction != null
+        has_faction = true
+      end
+
+      if has_faction
+
+        # 取得ポーンの派閥を確認
+        if p.Faction.IsPlayer
+          player_faction = "プレイヤー派閥"
+          player_pawns = player_pawns | array.add p.name
+        else if p.Faction.PlayerRelationKind == "Hostile"
+          hostile_faction = "敵対派閥"
+          hostile_pawns = hostile_pawns | array.add p.name
+        else if p.Faction.PlayerRelationKind == "Ally"
+          ally_faction = "同盟派閥"
+          ally_pawns = ally_pawns | array.add p.name
+        else if p.Faction.PlayerRelationKind == "Neutral"
+          neutral_faction = "中立派閥"
+          neutral_pawns = neutral_pawns | array.add p.name
+        else
+          no_faction = "無所属"
+          other_pawns = other_pawns | array.add p.name
+        end
+
+        # 戦闘中か？狩りの場合でも反応するので注意、プレイヤー派閥の場合のみ取得
+        if p.Faction.IsPlayer
+          latest_tick = 99999
+          if p.mindState.lastRangedHarmTick != 0
+            latest_tick = p.mindState.lastRangedHarmTick
+          end
+
+          if p.mindState.lastMeleeThreatHarmTick != 0
+            if latest_tick > p.mindState.lastMeleeThreatHarmTick
+              latest_tick = p.mindState.lastMeleeThreatHarmTick
+            end
+          end
+
+          # 徴兵されているか
+          is_drafted = false
+          if p.Drafted
+            is_drafted = true
+          end
+
+          # ゲーム内で4時間以内に攻撃被弾していた場合
+          
+          
+          if latest_tick != 99999
+            last_attack_tick = Find.tickmanager.ticksgame - p.mindState.lastAttackTargetTick
+            last_harm_tick = Find.tickmanager.ticksgame - latest_tick
+            if last_attack_tick < 5000 || last_harm_tick < 5000
+              is_combat = true      
+            else if last_attack_tick < 50000 || last_harm_tick < 50000
+              is_combat = true
+            else
+              is_combat = false
+            end
+          end
+        end
+      end
+
+      # 周囲が危険 + 戦闘中の場合
+      if danger_flag && is_combat
+        combat_pawns = combat_pawns | array.add p.name
+      end
+
+    end
+  end
+
+  if player_pawns | array.size > 0
+    player_pawns_name = player_pawns | array.join ","
+    p_text = "プレイヤー派閥のメンバー【" + player_pawns_name + "】"
+    text_list = text_list | array.add p_text
+  end
+
+  if hostile_pawns | array.size > 0
+    hostile_pawns_name = hostile_pawns | array.join ","
+    h_text = "敵対派閥のメンバー【" + hostile_pawns_name + "】"
+    text_list = text_list | array.add h_text
+  end
+
+  if ally_pawns | array.size > 0
+    ally_pawns_name = ally_pawns | array.join ","
+    a_text = "同盟派閥のメンバー【" + ally_pawns_name + "】"
+    text_list = text_list | array.add a_text
+  end
+
+  if neutral_pawns | array.size > 0
+    neutral_pawns_name = neutral_pawns | array.join ","
+    n_text = "中立派閥のメンバー【" + neutral_pawns_name + "】"
+    text_list = text_list | array.add n_text
+  end
+
+  if other_pawns | array.size > 0
+    other_pawns_name = other_pawns | array.join ","
+    o_text = "無所属のメンバー【" + other_pawns_name + "】"
+    text_list = text_list | array.add o_text
+  end
+
+  formatted_combat_pawns = combat_pawns | array.join "、"
+  formatted_text_list = text_list | array.join "、"
+
+~}}
+{{~ # --- 結合後プロンプト --- ~}}
+{{~ if formatted_combat_pawns != "" ~}}
+あなたは架空キャラのロールプレイAIです。【{{~ formatted_combat_pawns ~}}】は敵対勢力と戦闘中です！
+{{ formatted_text_list }}の臨場感のある会話を生成してください
 {{~ else ~}}
-{{~ other_pawns = other_pawns | array.add p.name ~}}
-{{~ o_faction = p.Faction.Name ~}}
-{{~ end ~}}
-{{~ else ~}}
-{{~ unknown_pawns = p.name ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ player_pawns_name = player_pawns | array.join "、" ~}}
-{{~ hostile_pawns_name = hostile_pawns | array.join "、" ~}}
-{{~ ally_pawns_name = ally_pawns | array.join "、" ~}}
-{{~ other_pawns_name = other_pawns | array.join "、" ~}}
-{{~ unknown_pawns_name = unknown_pawns | array.join "、" ~}}
-{{~ combat_pawns_name = combat_pawns | array.join "、" ~}}
-{{~ if player_pawns_name != "" ~}}
-{{~ p_text = "、プレイヤー派閥のメンバー【"+ player_pawns_name + "】"~}}
-{{~ end ~}}
-{{~ if hostile_pawns_name != "" ~}}
-{{~ h_text = "、敵対派閥のメンバー（NPC）【"+ hostile_pawns_name + "】"~}}
-{{~ end ~}}
-{{~ if ally_pawns_name != "" ~}}
-{{~ a_text = "、同盟派閥のメンバー（NPC）【"+ ally_pawns_name + "】"~}}
-{{~ end ~}}
-{{~ if other_pawns_name != "" ~}}
-{{~ o_text = "、中立派閥のメンバー（NPC）【"+ other_pawns_name + "】"~}}
-{{~ end ~}}
-{{~ if unknown_pawns_name != "" ~}}
-{{~ u_text = "、派閥不明のNPC【"+ unknown_pawns_name + "】"~}}
-{{~ end ~}}
-{{~ if danger_flag == true ~}}
-{{~ if combat_pawns_name != "" ~}}
-{{~ combat_text =  combat_pawns_name + "は現在戦闘中です！" ~}}
-{{~ end ~}}
-{{~ end ~}}
-{{~ # ▼結合後プロンプト ~}}
-あなたはRimworldにおける架空キャラのロールプレイAIです。以下に提供される
-情報を背景とし{{ p_text }}{{ h_text }}{{ a_text }}{{ o_text }}{{ u_text }}の会話を生成してください。
-{{~ if combat_text != null ~}}
-{{ combat_text }}
-{{~ end ~}}
-{{~ # ▼自派閥の目標設定（たまに出力して常時この話をしないように） ~}}
-{{~ if (Find.TickManager.TicksGame % 10) == 0 && Find.FactionManager.OfPlayer.HasName ~}}
-{{~ if player_pawns_name != "" ~}}
-派閥:{{ Find.FactionManager.OfPlayer }}の目的は宇宙船ノアを改造しながら惑星調査を行うことです
-{{~ end ~}}
+あなたは架空キャラのロールプレイAIです。以下に提供される情報を背景とし
+{{ formatted_text_list }}の会話を生成してください。
 {{~ end ~}}
 
 出力形式
@@ -103,5 +140,5 @@ JSONL: {"name": "キャラ名", "text": "台詞"}
 
 制約
 - 日本語のみ
-- 1~2台詞、各200文字以内
+- 1~2台詞、300文字程度
 - 年齢・性別に応じた口調
