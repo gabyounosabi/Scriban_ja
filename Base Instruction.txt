@@ -9,7 +9,9 @@
 
   # ポーン毎の戦闘情報を取得するためポーンループ
   for p in pawns
-    if p != null
+    if p == null
+      continue
+    end
       
       is_combat = false
       is_drafted = false
@@ -112,7 +114,6 @@
         combat_pawns = combat_pawns | array.add p.name
       end
 
-    end
   end
 
   if player_pawns | array.size > 0
@@ -150,12 +151,16 @@
 
 ~}}
 {{~ # --- 結合後プロンプト --- ~}}
+{{~ if !ns_base_text ~}}
 {{~ if formatted_combat_pawns != "" ~}}
 あなたは架空キャラのロールプレイAIです。【{{~ formatted_combat_pawns ~}}】は敵対勢力と戦闘中です！
 {{ formatted_text_list }}の臨場感のある会話を生成してください
 {{~ else ~}}
 あなたは架空キャラのロールプレイAIです。以下に提供される情報を背景とし
 {{ formatted_text_list }}の会話を生成してください。
+{{~ end ~}}
+{{~ else ~}}
+{{~ ns_base_text ~}}{{~ "\n" ~}}
 {{~ end ~}}
 
 出力形式
@@ -168,7 +173,17 @@ JSONL: {"name": "キャラ名", "text": "台詞", "act": "行動タイプ", "tar
 JSONL: {"name": "キャラ名", "text": "台詞"}
 {{~ end ~}}
 
+{{~ if !ns_option ~}}
 制約
 - 日本語のみ
 - 1人あたり1台詞、100字程度
-- 年齢・性別に応じた口調
+- 台詞には「」『』を付けない
+- 性別に応じた口調
+{{~ else ~}}
+制約
+- 日本語のみ
+- textは200文字程度
+- 台詞には「」『』を付けない
+- 性別に応じた口調
+{{~ ns_option ~}}
+{{~ end ~}}
