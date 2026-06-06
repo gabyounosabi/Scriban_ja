@@ -75,6 +75,7 @@
 {{~ # ▼置換、非表示にしたい特性情報、keyが特性欄にある場合、valueに置換する、""と入力することで非表示に" ~}}
 {{~ keyword_traits_replacements = {
 "よたか": "夜に活動するのが好き",
+"小走り": "敏捷",
 "歓喜": "みんなに愛される存在",
 "苦悩する芸術家": "独特な芸術観",
 "ドラッグ常用者": "",
@@ -124,7 +125,7 @@
 "ToxicBuildup": "毒物が蓄積している",
 "VEF_ToxicBuildup": "毒物が蓄積している",
 "VacuumExposure": "宇宙空間の真空暴露によって苦しんだ",
-"LungRot": "腐乱死体のガスで肺にダメージを負った",
+"LungRot": "に腐乱死体のガスによる疾患を抱えている",
 "OrganDecay": "の臓器腐敗が始まりました",
 "Shredded": "に裂傷を負った",
 "AcidBurn": "に酸熱傷を負った",
@@ -146,6 +147,7 @@
 "VisitColony": "訪問者が訪れています",
 "LordJob_MechanoidsDefend": "のメカノイドが近くにいます",
 "LordJob_SleepThenMechanoidsDefend": "の危険なメカノイドが休眠状態で近くにいます",
+"LordJob_Joinable_Party": "のメンバーはパーティを楽しんでいます",
 "HiveQueen": "　この地底には人を襲う恐ろしい虫たちが巣食っています",
 "CreepJoiner": "怪しい雰囲気の人間が来ています",
 "ShamblerSwarm": "恐ろしい歩く死体が拠点の付近をうろついています",
@@ -228,8 +230,7 @@
       map_incident_all = prompt | string.split "[" | array.last | string.split "]" | array.first
       map_incident = map_incident_all | string.split "\n" | array.first
     end
-    # ゲーム内の経過Tick
-    game_ticks_elapsed = Find.tickmanager.ticksgame
+
     # プレイヤー派閥名
     player_faction_name = Find.FactionManager.OfPlayer.Name
     # プレイヤー派閥の人型ポーン
@@ -438,7 +439,9 @@
   pawn_info = {}
   pawns_info = []
   for p in pawns
-    if p != null
+    if p == null
+      continue
+    end
 
       # 派閥を持っているか
       has_faction = false
@@ -546,6 +549,7 @@
       pawn_mentalstate = p.MentalStateDef
       pawn_id = p.thingIDNumber
 
+      # 自派閥以外のポーンの場合
       pawn_faction_type = null
       faction_text = null
       if has_faction
@@ -565,6 +569,7 @@
         end
       end
 
+      # ポーンの種類
       if p.RaceProps.Humanlike
         pawn_biological_type = "Humanlike"
       else if p.RaceProps.IsMechanoid
@@ -579,12 +584,14 @@
         pawn_biological_type = "Other"
       end
 
+      # ポーンの性別
       if p.gender == "Male"
         pawn_gender = "男性"
       else if p.gender == "Female"
         pawn_gender = "女性"
       end
 
+      # ポーンのロール
       if p.role == "Prisoner"
         pawn_role = "囚人"
       else if p.role == "Slave"
@@ -595,11 +602,12 @@
       pawn_lordjob = null
       if !is_player_pawn
         for item in keyword_lordjob_for_pawn
-          if p.lord != null
-            if p.lord.LordJob | string.contains item.key
-              pawn_lordjob = item.value
-            end
+          if p.lord == null
+            continue
           end
+          if p.lord.LordJob | string.contains item.key
+            pawn_lordjob = item.value
+          end          
         end
       end
 
@@ -661,6 +669,12 @@
           combat_personality = line | string.replace "{!}" "" | string.replace "{END}" ""
           combat_personality_list = combat_personality_list | array.add combat_personality
 
+        else if (line | string.contains "{NS}") && (line | string.contains "{END}")
+          # → {NS}文字列{END} を分解する
+
+          ns_personality = line | string.replace "{NS}" "" | string.replace "{END}" ""
+          ns_personality_list = ns_personality_list | array.add ns_personality
+
         else
           # 通常の文字列として蓄積
           base_personality_lines = base_personality_lines | array.add line
@@ -709,9 +723,7 @@
       # fullthoughtが使える時のみ
       casual_thoughts = null
       persistent_thoughts = null
-      pawn_injuries = null
       emotional_events = null
-      pawn_diseases = null
       pawn_status = null
       pawn_combat_status = null
 
@@ -722,6 +734,7 @@
             casual_thoughts = casual_thoughts | array.add item.value
           end
         end
+
         # 常に表示する欲求（飢餓等）
         for item in keyword_persistent_thoughts
           if p.fullthought | string.contains item.key
@@ -741,34 +754,6 @@
           # TODO 適宜追加
 
         end
-
-        # 痛みが強い場合に表示するもの
-        #if (p.fullthought | string.contains "深刻な痛み") || (p.fullthought | string.contains "激しい痛み") || (p.fullthought | string.contains "気が遠くなる痛み")
-        # # 怪我、大量に表示される可能性があるので重症度が高そうな物を一つだけ表示（keyword_injuriesの順番）
-        #  cleaned_health = p.health | string.replace "Health: " ""
-        #  for item in keyword_injuries
-        #    cleaned_health = cleaned_health | string.replace (item.key + "痕") ""
-        #  end
-
-          
-        #  top_injury_found = false
-
-        #  for item in keyword_injuries
-        #    if !top_injury_found
-        #      if cleaned_health | string.contains item.key
-        #        pawn_injuries = pawn_injuries | array.add item.value
-        #       top_injury_found = true
-        #      end
-        #    end
-        #  end
-        #  # 病気
-        #  for item in keyword_diseases
-        #    if p.health | string.contains item.key
-        #      pawn_diseases = pawn_injuries | array.add item.value
-        #    end
-        #  end
-
-        # end
 
         # 常に表示したい健康状態（ゴージュースによる興奮等）
         for item in keyword_status
@@ -823,8 +808,8 @@
       # 欠損部位リストを初期化
       missingbodypart_list = {}
 
-      # ループして分類、自派閥ポーンにのみ実行
-      if is_player_pawn
+      # ループして分類、自派閥ポーンにのみ実行、ゲーム開始直後はしばらく無視
+      if is_player_pawn && game_ticks_elapsed > 420000
         for hediff in (GetHediffs p)
           raw = hediff | string.replace "(" "" | string.replace ")" "" | string.strip
           parts = raw | string.split " "
@@ -947,7 +932,7 @@
       end
 
       # 現在行動の対象オブジェクト取得
-      # nullチェックは厳格に
+      
       dead_innerpawn_name = null
       dead_innerpawn_faction = null
       dead_innerpawn_faction_type = null
@@ -961,10 +946,15 @@
       socialfight_enemy_name = null      
       socialfight_enemy_faction = null
 
+      # nullチェックは厳格に
       if p.CurJob != null
         for target in [p.CurJob.targetA, p.CurJob.targetB, p.CurJob.targetC]
+          if target == null || target.Thing == null
+            continue
+          end
+
           # 死体に関するジョブ
-          if target != null && target.Thing != null && target.Thing.innerpawn != null
+          if target.Thing.innerpawn != null
             
             # 表示するjobに内部死体名が含まれている場合のみ実行
             if pawn_job | string.contains target.Thing.innerpawn.name
@@ -1008,59 +998,60 @@
             end
 
           # 死体以外で対象がポーンのジョブ
-          else if target != null && target.Thing != null
-            # 対象がポーンか確認
-            if target.Thing.RaceProps != null 
-              # 表示するjobに内部ポーン名が含まれている場合のみ実行
-              if pawn_job | string.contains target.Thing.name
-                pawn_obj = target.Thing
-                innerpawn_name = pawn_obj.name            
-                innerpawn_faction = pawn_obj.Faction                
+            continue
+          end
+          
+          # 対象がポーンか確認
+          if target.Thing.RaceProps != null 
+            # 表示するjobに内部ポーン名が含まれている場合のみ実行
+            if pawn_job | string.contains target.Thing.name
+              pawn_obj = target.Thing
+              innerpawn_name = pawn_obj.name            
+              innerpawn_faction = pawn_obj.Faction                
 
-                if pawn_obj.Faction != null
-                  if pawn_obj.Faction.IsPlayer
-                    innerpawn_faction_type = "プレイヤー派閥"
-                  else if pawn_obj.Faction.PlayerRelationKind == "Hostile"
-                    innerpawn_faction_type = "敵対派閥:"
-                  else if pawn_obj.Faction.PlayerRelationKind == "Ally"
-                    innerpawn_faction_type = "同盟派閥:"
-                  else if pawn_obj.Faction.PlayerRelationKind == "Neutral"
-                    innerpawn_faction_type = "中立派閥:"
-                  else
-                    innerpawn_faction_type = ""
-                  end
-                end
-
-                if pawn_obj.def != null
-                  innerpawn_kind = pawn_obj.def.label
-                end
-
-                if pawn_obj.RaceProps.Humanlike
-                  innerpawn_biological_type = "人間"
-                else if pawn_obj.RaceProps.IsMechanoid
-                  innerpawn_biological_type = "メカノイド"
-                else if pawn_obj.RaceProps.Animal
-                  innerpawn_biological_type = "動物"
-                else if pawn_obj.raceprops.IsAnomalyEntity
-                  innerpawn_biological_type = "異形"
-                else if pawn_obj.IsShambler
-                  innerpawn_biological_type = "シャンブラー"
+              if pawn_obj.Faction != null
+                if pawn_obj.Faction.IsPlayer
+                  innerpawn_faction_type = "プレイヤー派閥"
+                else if pawn_obj.Faction.PlayerRelationKind == "Hostile"
+                  innerpawn_faction_type = "敵対派閥:"
+                else if pawn_obj.Faction.PlayerRelationKind == "Ally"
+                  innerpawn_faction_type = "同盟派閥:"
+                else if pawn_obj.Faction.PlayerRelationKind == "Neutral"
+                  innerpawn_faction_type = "中立派閥:"
                 else
-                  innerpawn_biological_type = ""
+                  innerpawn_faction_type = ""
                 end
+              end
+
+              if pawn_obj.def != null
+                innerpawn_kind = pawn_obj.def.label
+              end
+
+              if pawn_obj.RaceProps.Humanlike
+                innerpawn_biological_type = "人間"
+              else if pawn_obj.RaceProps.IsMechanoid
+                innerpawn_biological_type = "メカノイド"
+              else if pawn_obj.RaceProps.Animal
+                innerpawn_biological_type = "動物"
+              else if pawn_obj.raceprops.IsAnomalyEntity
+                innerpawn_biological_type = "異形"
+              else if pawn_obj.IsShambler
+                innerpawn_biological_type = "シャンブラー"
+              else
+                innerpawn_biological_type = ""
               end
             end
+          end
 
-                         
-            #特定CurJobの場合だけ対象ポーン情報を取得
-            #ケンカ
-            if p.CurJob.def != null
-              if p.CurJob.def.defName | string.contains "SocialFight"
-                
-                socialfight_enemy_name = target.Thing.name            
-                socialfight_enemy_faction = target.Thing.faction
-                
-              end
+                        
+          #特定CurJobの場合だけ対象ポーン情報を取得
+          #ケンカ
+          if p.CurJob.def != null
+            if p.CurJob.def.defName | string.contains "SocialFight"
+              
+              socialfight_enemy_name = target.Thing.name            
+              socialfight_enemy_faction = target.Thing.faction
+              
             end
           end
         end
@@ -1165,6 +1156,7 @@
           "probability_personality_list": probability_personality_list, #ペルソナ出力確率
           "keyword_personality_list": keyword_personality_list, #ペルソナトリガーキーワード
           "combat_personality_list": combat_personality_list, #戦闘中に表示されるペルソナ設定
+          "ns_personality_list": ns_personality_list, #特殊ペルソナ設定
           "traits": pawn_traits, #特性
           "weapon": pawn_weapon, #武器
           "skills": pawn_skills, #スキル
@@ -1172,8 +1164,6 @@
           "casual_thoughts": casual_thoughts, #通常欲求（3割で表示）
           "persistent_thoughts": persistent_thoughts, #常に表示する欲求（飢餓や強い痛み等）
           "emotional_events": emotional_events, #印象的な出来事（血縁の死等）
-          #"injuries": pawn_injuries, #怪我
-          #"diseases": pawn_diseases, #病気
           "status": pawn_status, #常に表示する健康状態（ゴージュースによる興奮とか）
           "hediff": hediff_list, #直近で変化した健康状態リスト
           "combat_status": pawn_combat_status, #戦闘中のみ表示する健康状態（種族特有ステータスや強化視覚センサー等）
@@ -1194,14 +1184,14 @@
 
       pawns_info = pawns_info | array.add pawn_info
 
-    end
   end
 ~}}
-{{~ # --- マップ、ポーン情報収集後作業 --- ~}}
+{{~ # --- 収集後作業 --- ~}}
 {{~
   # インシデントとポーンジョブを結合し、死亡ポーン名が含まれていないかチェック
-  check_list = map_info.incident | array.concat pawn_job_list
-
+  concat_list = map_info.incident | array.concat pawn_job_list
+  check_list = check_list | array.concat concat_list
+  
   # ペルソナキーワード用チェックリスト
   # 会話中のポーン名も含めるように、{"△△"}◯◯は△△を先生と呼ぶ{END}に対応
   check_list_for_personality = check_list | array.concat map_info.talking_pawns
@@ -1221,7 +1211,7 @@
 {{~ # ポーンループ ~}}
 {{~ for pi in pawns_info ~}}
 
-{{~ if !pi.is_player_pawn ~}}【NPC】{{~ end ~}}【{{ pi.name }}】{{~ if pi.age }} {{ pi.age }}歳{{~ end ~}}{{~ if pi.gender }} {{ pi.gender }}{{~ "\n" ~}}{{~ end ~}}
+{{~ if !pi.is_player_pawn ~}}【NPC】{{~ end ~}}【{{ pi.name }}】{{~ if !ns_flag ~}}{{~ if pi.age }} {{ pi.age }}歳{{~ end ~}}{{~ end ~}}{{~ if pi.gender }} {{ pi.gender }}{{~ "\n" ~}}{{~ end ~}}
 {{~ if pi.role ~}}このキャラクターは{{ pi.role }}として過ごしています{{~ "\n" ~}}{{~ end ~}}
 {{~ if pi.base_personality != "" ~}}{{ pi.base_personality }}{{~ "\n" ~}}{{~ end ~}}
 {{~ # ペルソナ追加条件出力 ~}}
@@ -1250,27 +1240,30 @@
 {{~ for item in pi.combat_personality_list ~}}
 {{~ if pi.is_combat ~}}{{~ if item ~}}{{~ item ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
 {{~ end ~}}
+{{~ if ns_flag ~}}{{~ for item in pi.ns_personality_list ~}}
+{{~ if item ~}}{{~ item ~}}{{~ "\n" ~}}{{~ end ~}}
+{{~ end ~}}{{~ end ~}}
 {{~ if pi.status | array.size > 0 ~}}{{~ for s in pi.status ~}}{{ s }}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
-{{~ if pi.is_player_pawn ~}}{{~ "\n" ~}}{{~ if pi.faction ~}}派閥:{{~ pi.faction ~}}{{~ "\n" ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.is_player_pawn ~}}{{~ "\n" ~}}{{~ if pi.faction ~}}派閥:{{~ pi.faction ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
 {{~ else ~}}{{~ if pi.faction_type ~}}{{~ pi.faction_type ~}}:{{~ pi.faction ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
 {{~ if pi.faction_text ~}}{{~ pi.faction_text ~}}{{~ "\n" ~}}{{~ end ~}}
-{{~ if pi.is_drafted ~}}このキャラクターは現在作戦行動中です{{~ "\n" ~}}{{~ end ~}}
-{{~ if danger_flag ~}}{{~ if pi.combat_text ~}}{{~ pi.combat_text ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.is_drafted ~}}このキャラクターは現在作戦行動中です{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if danger_flag ~}}{{~ if pi.combat_text ~}}{{~ pi.combat_text ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
 {{~ if pi.lordjob_text ~}}{{~ pi.lordjob_text ~}}{{~ "\n" ~}}{{~ end ~}}
-{{~ if pi.traits != "" ~}}{{~ pi.traits ~}}{{~ "\n" ~}}{{~ end ~}}
-{{~ if !pi.is_combat ~}}{{~ if pi.skills != "" ~}}得意スキル:{{~ pi.skills ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
-{{~ if pi.is_player_pawn ~}}{{~ if !pi.is_combat ~}}{{~ if pi.mood ~}}心情:{{~ pi.mood ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.traits != "" ~}}{{~ pi.traits ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if !pi.is_combat ~}}{{~ if pi.skills != "" ~}}得意スキル:{{~ pi.skills ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.is_player_pawn ~}}{{~ if !pi.is_combat ~}}{{~ if pi.mood ~}}心情:{{~ pi.mood ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
 {{~ # 戦闘時のみ表示するステータス ~}}
-{{~ if pi.is_combat ~}}{{~ if pi.weapon ~}}所持武器:{{~ pi.weapon ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
-{{~ if pi.is_combat ~}}{{~ if pi.combat_status | array.size > 0 ~}}{{~ for cs in pi.combat_status ~}}{{ cs }}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.is_combat ~}}{{~ if pi.weapon ~}}所持武器:{{~ pi.weapon ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.is_combat ~}}{{~ if pi.combat_status | array.size > 0 ~}}{{~ for cs in pi.combat_status ~}}{{ cs }}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
 {{~ # 3割抽選でcasual_thoughtsを表示 ~}}
-{{~ if !pi.is_combat ~}}{{~ for ct in pi.casual_thoughts ~}}{{~ if (mi.game_ticks_elapsed + pi.id ) * ( for.index + 1 ) * 137 % 100 | math.abs < 5 ~}}{{ ct }}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
-{{~ if pi.emotional_events | array.size > 0 ~}}{{~ for ev in pi.emotional_events ~}}{{ ev }}{{~ check_list = check_list | array.add ev ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
-{{~ if pi.location == "屋外" ~}}現在地:屋外{{~ "\n" ~}}{{~ else ~}}現在地:{{ pi.location_room }}{{~ if mi.temperature }} {{ pi.location_temperature }}{{~ end ~}}{{~ "\n" ~}}{{~ end ~}}
-現在の行動:{{~ pi.job ~}}{{~ "\n" ~}}
-{{~ if pi.socialfight_enemy_name ~}}ケンカの対象は{{~ if pi.socialfight_enemy_faction ~}}{{~ pi.socialfight_enemy_faction ~}}所属の{{~ end ~}}{{~ pi.socialfight_enemy_name ~}}です{{~ "\n" ~}}{{~ end ~}}
-{{~ if pi.is_downed ~}}{{~ "\n" ~}}！自力で立ち上がることが出来ません！{{~ "\n" ~}}{{~ end ~}}
-{{~ if pi.is_player_pawn ~}}
+{{~ if !ns_flag ~}}{{~ if !pi.is_combat ~}}{{~ for ct in pi.casual_thoughts ~}}{{~ if (mi.game_ticks_elapsed + pi.id ) * ( for.index + 1 ) * 137 % 100 | math.abs < 5 ~}}{{ ct }}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.emotional_events | array.size > 0 ~}}{{~ for ev in pi.emotional_events ~}}{{ ev }}{{~ check_list = check_list | array.add ev ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.location == "屋外" ~}}現在地:屋外{{~ "\n" ~}}{{~ else ~}}現在地:{{ pi.location_room }}{{~ if mi.temperature }} {{ pi.location_temperature }}{{~ end ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}現在の行動:{{~ pi.job ~}}{{~ "\n" ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.socialfight_enemy_name ~}}ケンカの対象は{{~ if pi.socialfight_enemy_faction ~}}{{~ pi.socialfight_enemy_faction ~}}所属の{{~ end ~}}{{~ pi.socialfight_enemy_name ~}}です{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.is_downed ~}}{{~ "\n" ~}}！自力で立ち上がることが出来ません！{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if pi.is_player_pawn ~}}
 {{~ # 常時表示する欲求・状態 ~}}
 {{~ if pi.persistent_thoughts | array.size > 0 ~}}{{~ for t in pi.persistent_thoughts ~}}！{{ t }}！{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
 {{~ if pi.hediff["3hours"] | array.size > 0 ~}}
@@ -1284,7 +1277,7 @@
 {{~ end ~}}
 {{~ end ~}}{{~ # pi.is_player_pawn ~}}
 {{~ if pi.social | array.size > 0 ~}}{{~ "\n" ~}}{{~ for rel in pi.social ~}}{{~ rel ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
-{{~ end ~}}{{~ #for pi in pawns_info ~}}
+{{~ end ~}}{{~ end ~}}{{~ #for pi in pawns_info ~}}
 {{~ # 補足情報辞書チェック ~}}
 {{~ for item in keyword_tips ~}}
   {{~ for target in check_list ~}}
@@ -1293,20 +1286,32 @@
     {{~ end ~}}
   {{~ end ~}}
 {{~ end ~}}
+{{~ if keyword_ns_tips ~}}
+  {{~ for item in keyword_ns_tips ~}}
+    {{~ for target in check_list ~}}
+      {{~ if target | string.contains item.key ~}}
+        {{~ ns_tips_list = ns_tips_list | array.add item.value ~}}
+      {{~ end ~}}
+    {{~ end ~}}
+  {{~ end ~}}
+{{~ end ~}}
 {{~ # 死亡ポーン補足説明 ~}}
-{{~ if target_pawn_info_list | array.size > 0~}}
+{{~ if !ns_flag ~}}{{~ if target_pawn_info_list | array.size > 0~}}
   {{~ for info in target_pawn_info_list ~}}
     {{~ tips_list = tips_list | array.add info ~}}
   {{~ end ~}}
-{{~ end ~}}
-{{~ # tips_listを表示~}}
-{{~ if tips_list | array.size > 0 ~}}{{~ "\n" ~}}補足情報{{~ "\n" ~}}{{~ for tip in tips_list ~}}{{ tip }}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
+{{~ end ~}}{{~ end ~}}
 
-{{~ if mi.is_on_map ~}}
+{{~ # tips_listを表示~}}
+{{~ if ns_text ~}}{{~ ns_text ~}}{{~ "\n" ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if tips_list | array.size > 0 ~}}{{~ "\n" ~}}補足情報{{~ "\n" ~}}{{~ for tip in tips_list ~}}{{ tip }}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}{{~ end ~}}
+{{~ if ns_tips_list | array.size > 0 ~}}{{~ "\n" ~}}補足情報{{~ "\n" ~}}{{~ for tip in ns_tips_list ~}}{{ tip }}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
+
+{{~ if !ns_flag ~}}{{~ if mi.is_on_map ~}}
 場所：{{ mi.biome }}
 {{~ if mi.environment ~}}{{ mi.environment }}{{"\n"}}{{~ end ~}}
 {{~ if mi.temperature ~}}{{ mi.temperature }}{{"\n"}}{{~ end ~}}
-{{~ if mi.conditions ~}}{{~ for condition in mi.conditions ~}}{{~ condition ~}}{{"\n"}}{{~ end ~}}{{~ end ~}}
+{{~ if mi.conditions ~}}{{~ for condition in mi.conditions ~}}{{~ condition ~}}{{~ "\n" ~}}{{~ end ~}}{{~ end ~}}
   {{~ if mi.lords | array.size > 0 ~}}
 
     {{~ for lord in mi.lords ~}}
@@ -1318,16 +1323,21 @@
   {{~ end ~}}
 {{~ if mi.manhunter_animals | array.size > 0 ~}}⚠ 凶暴化した動物：{{ mi.manhunter_animals | array.join "、" }}が外で暴れています！{{"\n"}}{{~ end ~}}
 {{~ if mi.danger_flag ~}}プレイヤー派閥である{{ mi.player_faction_name }}の全メンバーは{{ mi.player_humanlike_total_members | array.size }}名{{~ if mi.player_humanlike_downed_members | array.size > 0 ~}}、行動可能メンバーは残り{{ mi.player_humanlike_active_members | array.size }}名{{~ end ~}}です{{"\n"}}{{~ end ~}}{{~ end ~}}
-{{~ # mi.is_on_map ~}}
-{{~ if chat.history | string.contains "name" ~}}
+{{~ end ~}}{{~ # mi.is_on_map ~}}
+{{~ if ns_pawn_social ~}}{{~ ns_pawn_social ~}}{{~ "\n" ~}}{{~ end ~}}
+{{~ if !ns_flag ~}}{{~ if chat.history | string.contains "name" ~}}
 
 直近の会話履歴
 {{~ history = chat.history | string.split "text=" | array.last ~}}
 {{~ history ~}}{{~ "\n" ~}}
-{{~ end ~}}
+{{~ end ~}}{{~ end ~}}
 
+{{~ if ns_last_text ~}}
+{{~ ns_last_text ~}}
+{{~ else ~}}
 {{~ if mi.talking_pawns | array.size > 1 ~}}
 以上を踏まえ【{{~ mi.talking_pawns | array.join "、" ~}}】の会話を生成してください
 {{~ else if mi.talking_pawns | array.size == 1 ~}}
 以上を踏まえ【{{~ mi.talking_pawns | array.join "、" ~}}】の独り言を生成してください
+{{~ end ~}}
 {{~ end ~}}
