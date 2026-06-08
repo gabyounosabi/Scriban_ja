@@ -619,10 +619,12 @@
       probability_personality_list = []
       keyword_personality_list = []
       combat_personality_list = []
+      ns_personality_list = []
       base_personality_lines = []  # 通常行配列
 
       # 改行で分割してループ
-      lines = p.personality | string.split "\n"
+      personality_text = p.personality | string.replace "\r\n" "\n" | string.replace "\r" "\n"
+      lines = personality_text | string.split "\n"
       for line in lines
         line = line | string.strip
         if line == ""
