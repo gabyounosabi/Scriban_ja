@@ -16,7 +16,7 @@ RimtalkがLLMに送信するプロンプトを整形するScribanテンプレー
 ### 辞書の編集例
 
 ```scriban
-{{~ keyword_tips = {
+{{~ replace_dict = {
 "サイトスティーラー": "サイトスティーラーは姿を消せる異形生命体です",
 } ~}}
 ```
