@@ -1,189 +1,406 @@
-{{~ # --- 整形部分 --- ~}}
 {{~
+  # ===== 特殊シーン切り替え設定 =====
+  # NS_keywordとNS_genderはUser側にも複製されているため、変更時は必ず両方を揃える
+  # key: fullinteractionから検索する文字列
+  # value: 空なら一致行をそのまま使用し、値があれば一致行全体を置換する
+  NS_keyword = {
+    "キャッチボール": "",
+    "球技をして遊んだ": "ボールで遊んでいた",
+  }
 
-  # 初期化
-  danger_flag = false
-  if pawn.Map.dangerWatcher.DangerRating == "High" || pawn.Map.dangerWatcher.DangerRating == "Low"
-    danger_flag = true
+  # {name}はNS対象のpawn名へ置換される
+  NS_instruction = "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
+
+  # "Male" / "Female" / "ALL"（性別を問わない）
+  NS_gender = "Male"
+
+  # ===== プレイヤー派閥名 =====
+  # 通常のゲーム中はFind経由で取得し、取得不能時だけ汎用名へフォールバックする
+  player_faction_name = "プレイヤー陣営"
+  if Find.FactionManager != null && Find.FactionManager.OfPlayer != null
+    player_faction_name = Find.FactionManager.OfPlayer.Name
   end
 
-  # ポーン毎の戦闘情報を取得するためポーンループ
-  for p in pawns
-    if p == null
-      continue
+  # fullinteractionから、キーワードを含む最初の1行を取得する
+  func find_interaction_line
+    $interaction_text = $0
+    $keyword_dict = $1
+
+    if $interaction_text == null || $interaction_text == "" || $keyword_dict == null
+      ret ""
     end
-      
-      is_combat = false
-      is_drafted = false
-      latest_harm_tick = null
-      latest_attack_tick = null
-      latest_combat_tick = null
-      last_combat_tick = null
 
-      # 派閥を持っているか
-      has_faction = false
-      if p.Faction != null
-        has_faction = true
-      end
-
-      if has_faction
-
-        # 取得ポーンの派閥を確認
-        if p.Faction.IsPlayer
-          player_faction = "プレイヤー派閥"
-          player_pawns = player_pawns | array.add p.name
-        else if p.Faction.PlayerRelationKind == "Hostile"
-          hostile_faction = "敵対派閥"
-          hostile_pawns = hostile_pawns | array.add p.name
-        else if p.Faction.PlayerRelationKind == "Ally"
-          ally_faction = "同盟派閥"
-          ally_pawns = ally_pawns | array.add p.name
-        else if p.Faction.PlayerRelationKind == "Neutral"
-          neutral_faction = "中立派閥"
-          neutral_pawns = neutral_pawns | array.add p.name
-        else
-          no_faction = "無所属"
-          other_pawns = other_pawns | array.add p.name
-        end
-
-        # 狩りの場合でも反応するので注意、プレイヤー派閥の場合のみ取得
-        if p.Faction.IsPlayer
-
-          
-          # 戦闘中か？danger_flagがtrueの時のみ実行（狩り中でも反応してしまうため）
-          if danger_flag
-
-            # 敵は0が初期値、味方は-99999が初期値
-            if p.mindState.lastRangedHarmTick != 0 && p.mindState.lastRangedHarmTick != -99999
-              latest_harm_tick = p.mindState.lastRangedHarmTick
+    # fullinteractionの行順を優先する。同じ行に複数keyがある場合は辞書の登録順で最初のものを使う
+    # valueが空なら原文行、空でなければvalueだけを返す（部分置換ではなく行全体の置換）
+    for $line in ($interaction_text | SplitByLine)
+      $trimmed = $line | string.strip
+      if $trimmed != ""
+        for $key in ($keyword_dict | object.keys)
+          if $key != "" && ($trimmed | string.contains $key)
+            $replacement = $keyword_dict[$key]
+            if $replacement == null || $replacement == ""
+              ret $trimmed
             end
-
-            # -99999が初期値
-            if p.mindState.lastMeleeThreatHarmTick != -99999
-              # latest_harm_tickがnullでないなら比較して大きい方で更新
-              if latest_harm_tick
-                if latest_harm_tick < p.mindState.lastMeleeThreatHarmTick
-                  latest_harm_tick = p.mindState.lastMeleeThreatHarmTick
-                end
-              else
-                latest_harm_tick = p.mindState.lastMeleeThreatHarmTick
-              end
-            end
-
-            # -99999が初期値
-            if p.mindState.lastAttackTargetTick != -99999
-              latest_attack_tick = p.mindState.lastAttackTargetTick
-            end
-
-            # RangeもMeleeもnullでないなら比較、片方がnullなら存在する方でlast_combat_tickを更新
-            if latest_harm_tick != null && latest_attack_tick != null
-              if latest_harm_tick > latest_attack_tick
-                latest_combat_tick = latest_attack_tick
-              else
-                latest_combat_tick = latest_harm_tick
-              end
-            else if latest_harm_tick != null
-              latest_combat_tick = latest_harm_tick
-            else if latest_attack_tick != null
-              latest_combat_tick = latest_attack_tick
-            end
-
-
-            # ゲーム内で2時間以内に攻撃被弾していた場合
-            if latest_combat_tick != null
-              last_combat_tick = Find.tickmanager.ticksgame - latest_combat_tick
-              
-              if last_combat_tick < 5000
-                
-                is_combat = true
-                combat_text = "現在戦闘中です！"
-              else if last_combat_tick < 50000
-                is_combat = true
-                combat_text = "戦闘状態を継続中です"
-              else
-                is_combat = false
-                combat_text = "非戦闘状態です"
-              end
-            end
+            ret $replacement
           end
         end
       end
+    end
 
-      # 周囲が危険 + 戦闘中の場合
-      if danger_flag && is_combat
-        combat_pawns = combat_pawns | array.add p.name
+    ret ""
+  end
+
+  # ctx.historyからAIが出力したtextだけを履歴として抽出する
+  # JSONとして再解析せず、"role=AI | text="以降を不透明な履歴文字列として保持する
+  # RimTalk側の履歴書式が変わった場合は、このmarkerも合わせて変更する必要がある
+  func extract_ai_history
+    $history_text = $0
+    $marker = "role=AI | text="
+    $result = ""
+
+    if $history_text == null || $history_text == ""
+      ret ""
+    end
+
+    for $line in ($history_text | SplitByLine)
+      if $line | string.contains $marker
+        $parts = $line | string.split $marker
+        if $parts.size > 1
+          $ai_text = $parts[1] | string.strip
+
+          # プレビュー時にRimTalkが返すダミー履歴は使用しない
+          if $ai_text != "" && !($ai_text | string.contains "placeholder for chat history")
+            if $result != ""
+              $result = $result + "\n"
+            end
+            $result = $result + "- " + $ai_text
+          end
+        end
+      end
+    end
+
+    ret $result
+  end
+
+  # 指定性別かつfullinteractionに指定語がある、最初のpawnを対象にする
+  func find_NS_pawn
+    $pawn_list = $0
+    $target_gender = $1
+    $keyword_dict = $2
+
+    if $target_gender == "" || $keyword_dict == null
+      ret null
+    end
+
+    $keys = $keyword_dict | object.keys
+    if $keys.size == 0
+      ret null
+    end
+
+    # 複数pawnが一致しても最初の1人だけを採用する。ALLでもキーワード一致は必須
+    for $pawn in $pawn_list
+      if ($target_gender == "ALL" || $pawn.gender == $target_gender) && (find_interaction_line $pawn.fullinteraction $keyword_dict) != ""
+        ret $pawn
+      end
+    end
+
+    ret null
+  end
+
+  # ===== pawn名を「Abiko、Linda」の形に整形 =====
+  func format_pawn_names
+    $pawn_list = $0
+    $result = ""
+
+    for $pawn in $pawn_list
+      if $result != ""
+        $result = $result + "、"
+      end
+      $result = $result + $pawn.name
+    end
+
+    ret $result
+  end
+
+  # ===== マップ内の会話に影響しやすい存在を短くまとめる =====
+  # 地上の訪問トレーダーと、ダウンしていない敵対Pawnを対象にする
+  func build_map_awareness
+    $current_map = $0
+    if $current_map == null || $current_map.mapPawns == null
+      ret ""
+    end
+
+    $trader_kinds = ""
+    $trader_kind_keys = "|"
+    $has_hostile = false
+
+    for $map_pawn in $current_map.mapPawns.AllPawnsSpawned
+      if $map_pawn.TraderKind != null && $map_pawn.mindState != null && !$map_pawn.mindState.traderDismissed
+        $trader_kind = $map_pawn.TraderKind.LabelCap | string.strip
+        $trader_kind_key = "|" + $trader_kind + "|"
+        if $trader_kind != "" && !($trader_kind_keys | string.contains $trader_kind_key)
+          if $trader_kinds != ""
+            $trader_kinds = $trader_kinds + "、"
+          end
+          $trader_kinds = $trader_kinds + $trader_kind
+          $trader_kind_keys = $trader_kind_keys + $trader_kind + "|"
+        end
       end
 
+      if (IsEnemy $map_pawn) && !$map_pawn.Downed
+        $has_hostile = true
+      end
+
+    end
+
+    if $trader_kinds != "" && $has_hostile
+      ret $trader_kinds + "が滞在中。活動可能な敵対者が存在します。"
+    end
+    if $trader_kinds != ""
+      ret $trader_kinds + "が滞在中です。"
+    end
+    if $has_hostile
+      ret "活動可能な敵対者が存在します。"
+    end
+    ret ""
   end
 
-  if player_pawns | array.size > 0
-    player_pawns_name = player_pawns | array.join ","
-    p_text = "プレイヤー派閥のメンバー【" + player_pawns_name + "】"
-    text_list = text_list | array.add p_text
+  # ===== 人数に応じた基本指示 =====
+  func build_base_instruction
+    $pawn_list = $0
+    $count = $pawn_list.size
+    $formatted_names = format_pawn_names $pawn_list
+
+    if $count == 0
+      ret "あなたはロールプレイAIです。与えられた人物設定と状況に従って台詞を生成してください。"
+    end
+
+    if $count == 1
+      ret "あなたはロールプレイAIです。【性格】を重視しつつ、" + $pawn_list[0].name + "の独り言を生成してください。他者への返答ではなく、その場で自然に漏れた言葉として生成してください。"
+    end
+
+    if (classify_pawns $pawn_list) == "mixed"
+      ret "あなたはロールプレイAIです。【性格】と敵対関係を重視しつつ、" + $formatted_names + "による対立した会話を生成してください。"
+    end
+
+    if $count == 2
+      ret "あなたはロールプレイAIです。【性格】と二人の関係性を重視しつつ、" + $formatted_names + "の自然な会話を生成してください。互いの発言が繋がるようにしてください。"
+    end
+
+    ret "あなたはロールプレイAIです。【性格】と各人物の立場を重視しつつ、" + $formatted_names + "による自然な複数人会話を生成してください。全員が同じ話題や状況を共有している会話にしてください。"
   end
 
-  if hostile_pawns | array.size > 0
-    hostile_pawns_name = hostile_pawns | array.join ","
-    h_text = "敵対派閥のメンバー【" + hostile_pawns_name + "】"
-    text_list = text_list | array.add h_text
+  # ===== System プロンプト全体を組み立てる =====
+  func build_system_prompt
+    $pawn_list = $0
+    $player_faction_name = $1
+    $current_map = $2
+
+    $base_instruction = build_base_instruction $pawn_list
+
+    # ポーンごとの立場
+    $pawn_role_extra = build_pawn_role_instructions $pawn_list $player_faction_name
+
+    # 放置すると失血死するpawn
+    $critical_health_extra = build_critical_health_instructions $pawn_list
+
+    # 会話参加者が全員プレイヤー入植者の場合だけ、マップ内の周辺状況を補う
+    $map_awareness = ""
+    $all_player_colonists = $pawn_list.size > 0
+    for $participant in $pawn_list
+      if !$participant.IsFreeColonist
+        $all_player_colonists = false
+        break
+      end
+    end
+    if $all_player_colonists
+      $map_awareness = build_map_awareness $current_map
+    end
+
+    $result = $base_instruction
+
+    if $pawn_role_extra != ""
+      $result = $result + "\n\n" + $pawn_role_extra
+    end
+
+    if $map_awareness != ""
+      $result = $result + "\n\n- 周辺状況：" + $map_awareness
+    end
+
+    if $critical_health_extra != ""
+      $result = $result + "\n\n【生命の危機】\n" + $critical_health_extra
+    end
+
+    ret $result
+  end
+~}}
+{{~
+  # ===== RimTalkの健康情報から、死亡予測を伴う出血状態だけを抜き出す =====
+  func extract_fatal_bleeding
+    $text = $0
+    $marker = "Bleeding ("
+
+    if $text == null || $text == "" || !($text | string.contains $marker) || !($text | string.contains "death in")
+      ret ""
+    end
+
+    # 複数のBleeding表記がある場合も、死亡予測を含むものを順番に探す
+    $parts = $text | string.split $marker
+    for $part in $parts
+      if for.index > 0
+        $detail_parts = $part | string.split ")"
+        if $detail_parts.size > 0 && ($detail_parts[0] | string.contains "death in")
+          ret $marker + $detail_parts[0] + ")"
+        end
+      end
+    end
+
+    ret ""
   end
 
-  if ally_pawns | array.size > 0
-    ally_pawns_name = ally_pawns | array.join ","
-    a_text = "同盟派閥のメンバー【" + ally_pawns_name + "】"
-    text_list = text_list | array.add a_text
+  # ===== 失血死が迫っているpawnを名前付きで列挙 =====
+  func build_critical_health_instructions
+    $pawn_list = $0
+    $result = ""
+
+    for $pawn in $pawn_list
+      $bleeding = extract_fatal_bleeding $pawn.health
+      if $bleeding != ""
+        if $result != ""
+          $result = $result + "\n"
+        end
+        $result = $result + "- " + $pawn.name + "は" + $bleeding + "の状態です。治療されなければ失血死する危険と、その切迫感を発言に反映してください。"
+      end
+    end
+
+    ret $result
   end
 
-  if neutral_pawns | array.size > 0
-    neutral_pawns_name = neutral_pawns | array.join ","
-    n_text = "中立派閥のメンバー【" + neutral_pawns_name + "】"
-    text_list = text_list | array.add n_text
+  # ===== RimTalkが公開するpawn情報から、1人分の立場に応じた指示を生成 =====
+  # p.roleの値: Prisoner / Slave / Enemy / Enemy Defender /
+  #              Visitor / Lodger / Invader / Colonist / null
+  func get_pawn_role_instruction
+    $pawn = $0
+    $player_faction_name = $1
+
+    # GetRoleと同じく、拘束状態を最優先する
+    if $pawn.IsPrisoner
+      ret "囚人。拘束されている立場や、監視する側への感情を反映してください。"
+    end
+
+    if $pawn.IsSlave
+      ret "奴隷。支配されている立場や、自由を制限されている状況を反映してください。"
+    end
+
+    $role = $pawn.role
+
+    # roleの表現差に依存せず、RimTalk本体と同じ敵対判定を使う
+    if (IsEnemy $pawn)
+      ret "敵対勢力。" + $player_faction_name + "に対する警戒や敵意を反映してください。"
+    end
+
+    if $role == "Visitor"
+      ret "訪問者。訪問先への礼儀や、よそ者としての距離感を反映してください。"
+    end
+
+    if $role == "Lodger"
+      ret "一時滞在者。滞在先への配慮や、借りを作っている立場を反映してください。"
+    end
+
+    # 遠征中はroleがInvaderになるため、所属判定には直接プロパティを使う
+    if $pawn.IsFreeColonist
+      ret $player_faction_name + "の入植者"
+    end
+
+    # 判定できない場合は誤った立場を指定しない
+    ret ""
   end
 
-  if other_pawns | array.size > 0
-    other_pawns_name = other_pawns | array.join ","
-    o_text = "無所属のメンバー【" + other_pawns_name + "】"
-    text_list = text_list | array.add o_text
+  # ===== 全ポーンの立場を名前付きで列挙 =====
+  func build_pawn_role_instructions
+    $pawn_list = $0
+    $player_faction_name = $1
+    $result = ""
+
+    for $pawn in $pawn_list
+      $instruction = get_pawn_role_instruction $pawn $player_faction_name
+
+      # p.ageは表示用文字列なので、数値の生物学的年齢で子供かどうかを判定する
+      if $pawn.ageTracker != null && $pawn.ageTracker.AgeBiologicalYears <= 12
+        $child_instruction = "年齢相応の語彙・判断・感情反応を強く反映してください。"
+
+        if $instruction != ""
+          $instruction = $child_instruction + " " + $instruction
+        else
+          $instruction = $child_instruction
+        end
+      end
+
+      if $instruction != ""
+        if $result != ""
+          $result = $result + "\n"
+        end
+
+        $result = $result + "- " + $pawn.name + "：" + $instruction
+      end
+    end
+
+    ret $result
   end
 
-  formatted_combat_pawns = combat_pawns | array.join "、"
-  formatted_text_list = text_list | array.join "、"
+  # ===== 会話に登場する全pawnをチェックし、構成パターンを返す =====
+  # "mixed" = 敵と味方(またはそれ以外)が混在
+  # "all_enemy" = 全員敵
+  # "all_ally" = 全員味方/それ以外(敵がいない)
+  func classify_pawns
+    $pawn_list = $0
+    $has_enemy = false
+    $has_non_enemy = false
+    for $pawn in $pawn_list
+      # RimTalk本体と同じ判定を使う。囚人はIsEnemy内で除外される。
+      if (IsEnemy $pawn)
+        $has_enemy = true
+      else
+        $has_non_enemy = true
+      end
+    end
+    if $has_enemy && $has_non_enemy
+      ret "mixed"
+    end
+    if $has_enemy
+      ret "all_enemy"
+    end
+    ret "all_ally"
+  end
 
 ~}}
-{{~ # --- 結合後プロンプト --- ~}}
-{{~ if !ns_base_text ~}}
-{{~ if formatted_combat_pawns != "" ~}}
-あなたは架空キャラのロールプレイAIです。【{{~ formatted_combat_pawns ~}}】は敵対勢力と戦闘中です！
-{{ formatted_text_list }}の臨場感のある会話を生成してください
-{{~ else ~}}
-あなたは架空キャラのロールプレイAIです。以下に提供される情報を背景とし
-{{ formatted_text_list }}の会話を生成してください。
-{{~ end ~}}
-{{~ else ~}}
-{{~ ns_base_text ~}}{{~ "\n" ~}}
-{{~ end ~}}
+{{~
+  NS_pawn = find_NS_pawn pawns NS_gender NS_keyword
+  NS_line = ""
+  ai_history = extract_ai_history ctx.history
 
-出力形式
-{{~ if settings.ApplyMoodAndSocialEffects ~}}
-社交的な相互作用が発生する場合は、以下のキーを追加してください:
-JSONL: {"name": "キャラ名", "text": "台詞", "act": "行動タイプ", "target": "対象キャラ名"}
-"act"の値: "Insult", "Slight", "Chat", "Kind"のいずれか
-"target": "会話の対象となるキャラクター名"
-{{~ else ~}}
-JSONL: {"name": "キャラ名", "text": "台詞"}
-{{~ end ~}}
+  if NS_pawn != null
+    # 通常の複数人処理を使わず、該当pawnだけの特殊プロンプトへ切り替える
+    prompt_pawns = [NS_pawn]
+    NS_line = find_interaction_line NS_pawn.fullinteraction NS_keyword
+    system_prompt = (NS_instruction | string.replace "{name}" NS_pawn.name) + NS_line
+    output_rules = "textは200文字程度"
+  else
+    prompt_pawns = pawns
+    system_prompt = build_system_prompt prompt_pawns player_faction_name map
+    output_rules = "発言はキャラ毎に1回のみ\ntextは200文字程度"
+  end
 
-{{~ if !ns_option ~}}
-制約
-- 日本語のみ
-- 1人あたり1台詞、100字程度
-- 台詞には「」『』を付けない
-- 性別に応じた口調
-{{~ else ~}}
-制約
-- 日本語のみ
-- textは200文字程度
-- 台詞には「」『』を付けない
-- 性別に応じた口調
-{{~ ns_option ~}}
-{{~ end ~}}
+  if ai_history != ""
+    # 過去のAI出力をSystemへ置くため影響は強い。履歴に命令調の文があると次の出力にも影響し得る
+    system_prompt = system_prompt + "\n\n【過去の会話履歴】\n" + ai_history
+  end
+~}}
+{{~ system_prompt ~}}
+
+
+出力形式：
+JSON配列。各要素は以下の形式：
+{"name": "キャラ名", "text": "台詞"}
+
+{{~ output_rules ~}}
