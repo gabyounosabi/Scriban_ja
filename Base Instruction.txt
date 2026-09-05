@@ -8,11 +8,36 @@
     "球技をして遊んだ": "ボールで遊んでいた",
   }
 
+  # "Male" / "Female" / "ALL"（性別を問わない）
+  NS_gender = "Female"
+
   # {name}はNS対象のpawn名へ置換される
   NS_instruction = "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
 
-  # "Male" / "Female" / "ALL"（性別を問わない）
-  NS_gender = "Male"
+  # ===== プロンプトに表示する派閥名の変更 =====
+  # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前
+  faction_display_dict = {
+    "闇の存在": "異形",
+  }
+
+  func format_faction_name
+    $faction_name = $0
+    $dict = $1
+
+    if $faction_name == null || $faction_name == ""
+      ret ""
+    end
+
+    $original_name = $faction_name | string.strip
+    if $dict != null
+      $display_name = $dict[$original_name]
+      if $display_name != null && $display_name != ""
+        ret ($display_name | string.strip)
+      end
+    end
+
+    ret $original_name
+  end
 
   # ===== プレイヤー派閥名 =====
   # 通常のゲーム中はFind経由で取得し、取得不能時だけ汎用名へフォールバックする
@@ -20,6 +45,7 @@
   if Find.FactionManager != null && Find.FactionManager.OfPlayer != null
     player_faction_name = Find.FactionManager.OfPlayer.Name
   end
+  player_faction_name = format_faction_name player_faction_name faction_display_dict
 
   # fullinteractionから、キーワードを含む最初の1行を取得する
   func find_interaction_line
@@ -123,7 +149,7 @@
   end
 
   # ===== マップ内の会話に影響しやすい存在を短くまとめる =====
-  # 地上の訪問トレーダーと、ダウンしていない敵対Pawnを対象にする
+  # 地上の訪問トレーダーと、死亡・ダウンしていない敵対Pawnを対象にする
   func build_map_awareness
     $current_map = $0
     if $current_map == null || $current_map.mapPawns == null
@@ -132,7 +158,7 @@
 
     $trader_kinds = ""
     $trader_kind_keys = "|"
-    $has_hostile = false
+    $hostile_faction_counts = {}
 
     for $map_pawn in $current_map.mapPawns.AllPawnsSpawned
       if $map_pawn.TraderKind != null && $map_pawn.mindState != null && !$map_pawn.mindState.traderDismissed
@@ -147,21 +173,55 @@
         end
       end
 
-      if (IsEnemy $map_pawn) && !$map_pawn.Downed
-        $has_hostile = true
+      if (IsEnemy $map_pawn) && !$map_pawn.Dead && !$map_pawn.Downed
+        # Pawn.FactionはRimTalkのmagic fieldで派閥名文字列として取得できる
+        $faction_name = format_faction_name $map_pawn.faction faction_display_dict
+        if $faction_name == null || $faction_name == ""
+          $faction_name = "所属不明"
+        end
+
+        $current_count = $hostile_faction_counts[$faction_name]
+        if $current_count == null
+          $hostile_faction_counts[$faction_name] = 1
+        else
+          $hostile_faction_counts[$faction_name] = $current_count + 1
+        end
       end
 
     end
 
-    if $trader_kinds != "" && $has_hostile
-      ret $trader_kinds + "が滞在中。活動可能な敵対者が存在します。"
+    # 正確な個体数はLLMへ渡さず、脅威の規模だけを段階的に伝える。
+    # 1～9体は小規模、10～29体は多数、30体以上は大量として扱う。
+    $hostile_summary = ""
+    for $faction_name in ($hostile_faction_counts | object.keys)
+      if $hostile_summary != ""
+        $hostile_summary = $hostile_summary + "、"
+      end
+
+      $hostile_count = $hostile_faction_counts[$faction_name]
+      if $hostile_count >= 30
+        $hostile_scale = "大量の敵"
+      else if $hostile_count >= 10
+        $hostile_scale = "多数の敵"
+      else
+        $hostile_scale = "小規模の敵"
+      end
+
+      $hostile_summary = $hostile_summary + "敵対派閥「" + $faction_name + "」：" + $hostile_scale
     end
+
+    if $hostile_summary != ""
+      $result = "【重要：敵対勢力が活動中】\n現在のマップ上では、" + $hostile_summary + "が活動中です。平穏な日常会話にせず、存在する脅威への警戒と緊張感を最優先で反映してください。"
+      if $trader_kinds != ""
+        $result = $result + "\n- トレーダー：" + $trader_kinds + "が滞在中です。"
+      end
+      ret $result
+    end
+
     if $trader_kinds != ""
-      ret $trader_kinds + "が滞在中です。"
+      ret "【周辺状況】\n- トレーダー：" + $trader_kinds + "が滞在中です。"
     end
-    if $has_hostile
-      ret "活動可能な敵対者が存在します。"
-    end
+
     ret ""
   end
 
@@ -213,7 +273,7 @@
         break
       end
     end
-    if $all_player_colonists
+    if $all_player_colonists && $current_map != null
       $map_awareness = build_map_awareness $current_map
     end
 
@@ -223,8 +283,9 @@
       $result = $result + "\n\n" + $pawn_role_extra
     end
 
+    # 誰の立場に対する脅威かを明確にするため、警戒情報は人物別設定の直後へ置く
     if $map_awareness != ""
-      $result = $result + "\n\n- 周辺状況：" + $map_awareness
+      $result = $result + "\n\n" + $map_awareness
     end
 
     if $critical_health_extra != ""
@@ -377,7 +438,7 @@
 {{~
   NS_pawn = find_NS_pawn pawns NS_gender NS_keyword
   NS_line = ""
-  ai_history = extract_ai_history ctx.history
+  ai_history = ""
 
   if NS_pawn != null
     # 通常の複数人処理を使わず、該当pawnだけの特殊プロンプトへ切り替える
@@ -389,6 +450,8 @@
     prompt_pawns = pawns
     system_prompt = build_system_prompt prompt_pawns player_faction_name map
     output_rules = "発言はキャラ毎に1回のみ\ntextは200文字程度"
+    # 過去の会話履歴は通常モードだけで使用し、NS特殊シーンには混在させない
+    ai_history = extract_ai_history ctx.history
   end
 
   if ai_history != ""
