@@ -8,8 +8,73 @@
     "球技をして遊んだ": "ボールで遊んでいた",
   }
 
-  # "Male" / "Female" / "ALL"（性別を問わない）
-  NS_gender = "Male"
+  # NS判定を行う性別 "Male" / "Female" / "ALL"（性別を問わない）
+  NS_gender = "Female"
+
+  # ===== プロンプトに表示する派閥名の変更（System側と同じ値にする） =====
+  # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前
+  faction_display_dict = {
+    "闇の存在": "異形",
+  }
+
+  # ===== 除外/置換キーワード（key: 検索文字列, value: 置換後） =====
+  replace_dict = {
+    "Male": "男性",
+    "Female": "女性",
+    "Traits: ": "",
+    "Relations: ": "",
+    "Equipment: ": "",
+    "Memory: ": "",
+    "[Weapon]": "武器：",
+    "[Apparel]": "衣服：",
+    "防弾チョッキ": "",
+    "不死": "",
+    "不老": "",
+    "メカリンク": "",
+    "豪華な宿舎": "",
+  }
+
+  # ===== 表示する特性（key: 検索文字列, value: 表示名） =====
+  # ここに存在しない特性は表示しない
+  trait_display_dict = {
+    "勤労者": "勤労者",
+  }
+
+  # ===== 欲求の表示確率 =====
+  # key: 部分一致する文字列
+  # value: 表示確率（0～100）
+  thought_display_dict = {
+    "入植者が死んだ": 1,
+  }
+
+  # ===== 日常的な天候の表示確率 =====
+  # 完全一致した天候だけを確率表示する。未登録の特殊・危険な天候は常時表示する
+  weather_display_chance_dict = {
+    "快晴": 10,
+    "霧": 10,
+    "雨": 10,
+    "霧雨": 10,
+    "小雪": 10,
+  }
+
+  func format_faction_name
+    $faction_name = $0
+    $dict = $1
+
+    if $faction_name == null || $faction_name == ""
+      ret ""
+    end
+
+    $original_name = $faction_name | string.strip
+    if $dict != null
+      $display_name = $dict[$original_name]
+      if $display_name != null && $display_name != ""
+        ret ($display_name | string.strip)
+      end
+    end
+
+    ret $original_name
+  end
 
   func find_interaction_line
     $interaction_text = $0
@@ -63,36 +128,6 @@
 
     ret null
   end
-
-  # ===== 除外/置換キーワード（key: 検索文字列, value: 置換後） =====
-  replace_dict = {
-    "Male": "男性",
-    "Female": "女性",
-    "Traits: ": "",
-    "Relations: ": "",
-    "Equipment: ": "",
-    "Memory: ": "",
-    "[Weapon]": "武器：",
-    "[Apparel]": "衣服：",
-    "防弾チョッキ": "",
-    "不死": "",
-    "不老": "",
-    "メカリンク": "",
-    "豪華な宿舎": "",
-  }
-
-  # ===== 表示する特性（key: 検索文字列, value: 表示名） =====
-  # ここに存在しない特性は表示しない
-  trait_display_dict = {
-    "勤労者": "勤労者",
-  }
-
-  # ===== 欲求の表示確率 =====
-  # key: 部分一致する文字列
-  # value: 表示確率（0～100）
-  thought_display_dict = {
-    "入植者が死んだ": 1,
-  }
 
   # ===== 文字列内の "(...)" を丸ごと除去する =====
   func strip_parens
@@ -357,6 +392,7 @@
   func format_health_conditions
     $pawn = $0
     $threshold_ticks = $1
+    $current_game_ticks = $2
     $health_text = $pawn.health
     $result = ""
 
@@ -366,7 +402,9 @@
     end
 
     for $hediff in (GetHediffs $pawn)
-      if $hediff.ageTicks <= $threshold_ticks
+      # ゲーム開始時から存在するHediffはageTicksがTicksGame以上になる。
+      # 開始後に付与されたものだけを、従来の40時間制限の対象として表示する。
+      if $hediff.ageTicks < $current_game_ticks && $hediff.ageTicks <= $threshold_ticks
         # 空のvalueは項目全体の除外、それ以外は一致部分の置換に使う
         $health_label = replace_health_label $hediff.LabelCap replace_dict
 
@@ -476,6 +514,36 @@
   func random_percent
     $seed_num = $0
     ret (simple_random $seed_num) % 100
+  end
+
+  # ===== 日常的な天候だけを設定確率で表示する =====
+  func filter_weather
+    $weather_text = $0
+    $current_tick = $1
+    $chance_dict = $2
+
+    if $weather_text == null || $weather_text == ""
+      ret ""
+    end
+
+    $trimmed = $weather_text | string.strip
+    $chance = $chance_dict[$trimmed]
+
+    # 辞書にない天候は危険・特殊な可能性があるため、そのまま表示する
+    if $chance == null || $chance >= 100
+      ret $trimmed
+    end
+    if $chance <= 0
+      ret ""
+    end
+
+    # 同じプロンプト内では全pawnが同じ表示結果になる共通シード
+    $weather_seed = $current_tick + ($trimmed | string.size)
+    if (random_percent $weather_seed) < $chance
+      ret $trimmed
+    end
+
+    ret ""
   end
 
   # ===== 欲求を表示確率に従って抽出 =====
@@ -633,9 +701,12 @@
   current_tick = Find.TickManager.TicksGame
 
   NS_pawn = find_NS_pawn pawns NS_gender NS_keyword
+  NS_text = ""
   if NS_pawn != null
+    # 性別とキーワードの両条件を通過した時だけNS文字列を取得する
     # 通常の会話人数に関係なく、特殊シーンでは該当pawnだけを出力する
     prompt_pawns = [NS_pawn]
+    NS_text = find_interaction_line NS_pawn.fullinteraction NS_keyword
   else
     prompt_pawns = pawns
   end
@@ -655,7 +726,7 @@
     # 乱数用のシード値
     pawn_seed = (p.name | string.size) + (p.health | string.size) + (p.mood | string.size)
     # 100000Tick（約40時間）以内に付与された健康状態
-    injuries = format_health_conditions p 100000
+    injuries = format_health_conditions p 100000 current_tick
     # 武器情報だけを残し、()を外したもの
     equipment_replace = partial_replace (extract_weapon p.equipment) replace_dict
     equipment_clean = strip_parens equipment_replace
@@ -666,20 +737,22 @@
     # 辞書に登録された特性だけ抽出し、辞書のvalueで表示名を整える
     traits_filtered = filter_traits p.traits trait_display_dict
 
+    # ゲーム内部の所属は変えず、プロンプトに表示する派閥名だけを変更する
+    faction_clean = format_faction_name p.faction faction_display_dict
+
     # 現在の会話に関係する血縁関係だけ抽出
     relations_filtered = filter_relations p.fullrelation prompt_pawns p.job
 
-    # 屋内外・温度・部屋名に、マップの天候または特殊環境を補足
-    location_clean = format_location p.location weather
-
-    # fullinteractionの一致行。辞書に置換値があれば置換後の文字列になる
-    NS_text = find_interaction_line p.fullinteraction NS_keyword
+    # 日常的な天候を確率で間引いてから、屋内外・温度・部屋名へ補足する
+    weather_clean = filter_weather weather current_tick weather_display_chance_dict
+    location_clean = format_location p.location weather_clean
 
     # 1. 性格の条件タグを判定するため、最終出力と同じ材料から検索専用contextを先に作る
     # 下のblock組み立てと一部重複するが、性格を所定位置へ出すために必要な2段階処理
     temp_context = ""
     temp_context = temp_context + p.name + " " + p.age + "歳" + " " + (partial_replace p.gender replace_dict) + "\n"
-    temp_context = temp_context + (prepare_field "派閥"           p.faction       null       null    null)
+    # 性格タグは旧名・表示名のどちらでも反応できるよう、判定専用contextには両方を含める
+    temp_context = temp_context + (prepare_field "派閥"           (p.faction + " " + faction_clean) null null null)
     temp_context = temp_context + (prepare_field "特性"           traits_filtered null       null    null)
     temp_context = temp_context + (prepare_field "健康情報"       injuries        null null    null)
     temp_context = temp_context + (prepare_field "装備"           equipment_clean danger_flag       null    null)
@@ -700,7 +773,7 @@
     block = block + p.name + " " + p.age + "歳" + " " + (partial_replace p.gender replace_dict) + "\n"
     block = block + (prepare_field "性格"           personality_clean null    null    null)
     if NS_pawn == null
-      block = block + (prepare_field "派閥"           p.faction       null       null    null)
+      block = block + (prepare_field "派閥"           faction_clean   null       null    null)
       block = block + (prepare_field "特性"           traits_filtered null       null    null)
       block = block + (prepare_field "健康情報"       injuries        null null    null)
       block = block + (prepare_field "装備"           equipment_clean danger_flag       null    null)
