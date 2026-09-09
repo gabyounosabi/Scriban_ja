@@ -1,6 +1,6 @@
 {{~
   # ===== UN（ユニークシーン）変数 =====
-  # UN_gender・UN_chance・UN_keywordはUser側にもあるため、変更時は必ず両方を揃える
+  # UNはSystem、User側にもあるため、変更時は必ず両方を揃える
 
   # UNの対象性別："Male" / "Female" / "ALL"（性別を問わない）
   UN_gender = "Female"
