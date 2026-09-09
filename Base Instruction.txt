@@ -193,10 +193,15 @@
       $history_size = $history_text | string.size
     end
 
-    $seed = $current_tick + ($history_size * 7919)
-    $value = (($seed * 9301) + 49297) % 233280
-    if $value < 0
-      $value = $value + 233280
+    # 大きな整数の乗算や下位桁への依存を避け、Scriban標準のSHA-256で入力を混ぜる。
+    # 先頭6桁だけ数値化するため、途中計算も最大16,777,215で桁あふれしない。
+    $seed_text = "" + $current_tick + ":" + $history_size
+    $hash = $seed_text | string.sha256
+    $hex_digits = {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "a": 10, "b": 11, "c": 12, "d": 13, "e": 14, "f": 15}
+    $value = 0
+    for $i in 0..5
+      $digit = $hash | string.slice $i 1
+      $value = $value * 16 + $hex_digits[$digit]
     end
     ret $value % 100
   end
@@ -589,16 +594,17 @@
     end
 
     # 社交喧嘩はMeleeThreatStillThreatを伴うため、通常戦闘より先に判定する。
+    # 喧嘩相手は会話参加者とは限らないため、発言を生成する対象は別に明示する。
     if $active_social_fight_pair != ""
       if $count == 1
         ret "あなたはロールプレイAIです。" + $active_social_fight_pair + "は現在、些細な事で口論しています。【性格】を重視しつつ、" + $pawn_list[0].name + "の口論内容を生成してください。敵対派閥との戦闘として扱わないでください。"
       end
 
       if $count == 2
-        ret "あなたはロールプレイAIです。" + $active_social_fight_pair + "は現在、些細な事で口論しています。【性格】と二人の関係性を重視し、小さな口論を生成してください。敵対派閥との戦闘として扱わないでください。"
+        ret "あなたはロールプレイAIです。" + $active_social_fight_pair + "は現在、些細な事で口論しています。【性格】と二人の関係性を重視し、" + $formatted_names + "だけの会話を生成してください。口論の当事者と、それ以外の人物の立場を区別してください。敵対派閥との戦闘として扱わないでください。"
       end
 
-      ret "あなたはロールプレイAIです。会話参加者のうち、" + $active_social_fight_pair + "は現在、些細な事で口論しています。【性格】と各人物の関係性を重視し、小さな口論を生成してください。敵対派閥との戦闘として扱わないでください。"
+      ret "あなたはロールプレイAIです。" + $active_social_fight_pair + "は現在、些細な事で口論しています。【性格】と各人物の関係性を重視し、" + $formatted_names + "だけの会話を生成してください。口論の当事者と、それ以外の人物の立場を区別してください。敵対派閥との戦闘として扱わないでください。"
     end
 
     # 戦闘指示を冒頭へ組み込み、後段の周辺状況より強く会話内容へ反映させる。
@@ -639,10 +645,10 @@
       end
 
       if $count == 2
-        ret "あなたはロールプレイAIです。" + $recent_social_fight_pair + "はつい先ほど口論を終えた直後です。【性格】と二人の関係性を重視し、怒りや気まずさ、痛みが残る自然な会話を生成してください。互いの発言が繋がるようにしてください。"
+        ret "あなたはロールプレイAIです。" + $recent_social_fight_pair + "はつい先ほど口論を終えた直後です。【性格】と二人の関係性を重視し、" + $formatted_names + "だけの自然な会話を生成してください。口論の当事者には怒りや気まずさ、痛みを反映し、それ以外の人物の立場と区別してください。互いの発言が繋がるようにしてください。"
       end
 
-      ret "あなたはロールプレイAIです。会話参加者のうち、" + $recent_social_fight_pair + "はつい先ほど口論を終えた直後です。【性格】と各人物の関係性を重視し、その気まずさや緊張を共有した自然な会話を生成してください。"
+      ret "あなたはロールプレイAIです。" + $recent_social_fight_pair + "はつい先ほど口論を終えた直後です。【性格】と各人物の関係性を重視し、" + $formatted_names + "だけの自然な会話を生成してください。口論の当事者には気まずさや緊張を反映し、それ以外の人物の立場と区別してください。"
     end
 
     if $count == 1
@@ -714,6 +720,48 @@
   end
 ~}}
 {{~
+  # ===== 正確な死亡予測時間を、System指示向けの危険度表現へ変換 =====
+  func blur_fatal_bleeding
+    $detail = $0
+    $death_marker = "death in "
+
+    if $detail == null || !($detail | string.contains $death_marker)
+      ret ""
+    end
+
+    $death_parts = (" " + $detail) | string.split $death_marker
+    if $death_parts.size < 2
+      ret "治療しなければ失血死する危険がある状態"
+    end
+
+    $remaining_text = $death_parts[1] | string.strip
+    $remaining_hours = null
+    if $remaining_text | string.contains "minute"
+      $number_text = $remaining_text | string.replace "minutes" "" | string.replace "minute" "" | string.strip
+      $remaining_minutes = $number_text | string.to_float
+      if $remaining_minutes != null
+        $remaining_hours = $remaining_minutes / 60.0
+      end
+    else if $remaining_text | string.contains "hour"
+      $number_text = $remaining_text | string.replace "hours" "" | string.replace "hour" "" | string.strip
+      $remaining_hours = $number_text | string.to_float
+    end
+
+    if $remaining_hours == null || $remaining_hours < 0
+      ret "治療しなければ失血死する危険がある状態"
+    end
+    if $remaining_hours <= 1
+      ret "失血死が目前に迫る危機的状態"
+    end
+    if $remaining_hours <= 4
+      ret "失血死が間近に迫る極めて危険な状態"
+    end
+    if $remaining_hours <= 12
+      ret "早急な治療が必要な重篤な出血状態"
+    end
+    ret "治療しなければ近いうちに失血死する危険がある状態"
+  end
+
   # ===== RimTalkの健康情報から、死亡予測を伴う出血状態だけを抜き出す =====
   func extract_fatal_bleeding
     $text = $0
@@ -730,7 +778,7 @@
       if for.index > 0
         $detail_parts = $part | string.split ")"
         if $detail_parts.size > 0 && ($detail_parts[0] | string.contains "death in")
-          ret $marker + $detail_parts[0] + ")"
+          ret blur_fatal_bleeding $detail_parts[0]
         end
       end
     end
@@ -749,7 +797,7 @@
         if $result != ""
           $result = $result + "\n"
         end
-        $result = $result + "- " + $pawn.name + "は" + $bleeding + "の状態です。治療されなければ失血死する危険と、その切迫感を発言に反映してください。"
+        $result = $result + "- " + $pawn.name + "は" + $bleeding + "です。その切迫感を発言に反映してください。"
       end
     end
 
@@ -798,11 +846,11 @@
 
   # ===== Systemの人物補足へ、装備中の武器名だけを追加する =====
   # User側と同じく、マップが危険（Low/High）な時か狩猟中に表示する。マップ未取得時も表示対象。
-  # 衣服と半角括弧内の品質等は除く。武器情報がなければ「武器なし」と明示する。
+  # 衣服と半角括弧内の品質等は除く。装備情報の取得が有効で、武器がない場合は「武器なし」と明示する。
   # User側のreplace_dictは共有されないため、ここではゲーム上の武器名を使う。
   func get_pawn_weapon_instruction
     $pawn = $0
-    if $pawn == null
+    if $pawn == null || settings == null || settings.Context == null || settings.Context.IncludeEquipment != true
       ret ""
     end
 
@@ -943,7 +991,7 @@
   else
     prompt_pawns = pawns
     system_prompt = build_system_prompt prompt_pawns player_faction_name map
-    output_rules = "発言はキャラ毎に1回のみ\ntextは200文字程度"
+    output_rules = "発言はキャラ毎に1回まで\ntextは200文字程度"
     # 過去の会話履歴は通常モードだけで使用し、UN特殊シーンには混在させない
     ai_history = extract_ai_history ctx.history
   end
