@@ -28,8 +28,8 @@
   }
 
   # ===== 除外/置換キーワード（key: 検索文字列, value: 置換後） 前半部分は消さないでください =====
-  # 影響箇所：【健康情報】、【装備】の武器名、【欲求】。
-  # 【装備】・【欲求】では、一致部分をvalueへ置換する。valueが空なら一致部分だけを除去する。
+  # 影響箇所：冒頭の性別表示、【健康情報】、【装備】の武器名、【欲求】。
+  # 性別表示・【装備】・【欲求】では、一致部分をvalueへ置換する。valueが空なら一致部分だけを除去する。
   # 【健康情報】では、valueが空ならkeyを含むHediff項目全体を除外し、空でなければ一致部分だけを置換する。
   # 置換後の各欄は、ペルソナの{"キーワード"}条件を判定する文脈にも使われる。
   replace_dict = {
@@ -42,7 +42,6 @@
     "[Weapon]": "武器：",
     "[Apparel]": "衣服：",
     # ここから下は自由
-    "防弾チョッキ": "",
     "不死": "",
     "不老": "",
     "メカリンク": "",
@@ -217,10 +216,15 @@
       $history_size = $history_text | string.size
     end
 
-    $seed = $current_tick + ($history_size * 7919)
-    $value = (($seed * 9301) + 49297) % 233280
-    if $value < 0
-      $value = $value + 233280
+    # 大きな整数の乗算や下位桁への依存を避け、Scriban標準のSHA-256で入力を混ぜる。
+    # 先頭6桁だけ数値化するため、途中計算も最大16,777,215で桁あふれしない。
+    $seed_text = "" + $current_tick + ":" + $history_size
+    $hash = $seed_text | string.sha256
+    $hex_digits = {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "a": 10, "b": 11, "c": 12, "d": 13, "e": 14, "f": 15}
+    $value = 0
+    for $i in 0..5
+      $digit = $hash | string.slice $i 1
+      $value = $value * 16 + $hex_digits[$digit]
     end
     ret $value % 100
   end
@@ -258,22 +262,10 @@
   # ===== 半角の括弧内を除去する。単純な装備ラベル用で、入れ子の括弧の解析はしない =====
   func strip_parens
     $text = $0
-    $parts = $text | string.split "("
-    $result = ""
-    $first = true
-    for $part in $parts
-      if $first
-        $result = $result + $part
-        $first = false
-      else
-        $inner = $part | string.split ")"
-        if $inner.size > 1
-          $result = $result + ($inner | array.last)
-        end
-        # 分割結果に括弧後の要素がない場合は追加しない。閉じ括弧のない断片も捨てる。
-      end
+    if $text == null || $text == ""
+      ret ""
     end
-    ret ($result | string.strip)
+    ret $text | regex.replace "\\([^()]*\\)" "" | string.strip
   end
 
   # ===== 装備情報から武器部分だけを取得する =====
@@ -289,7 +281,7 @@
     if $weapon_parts.size < 2
       ret ""
     end
-    $apparel_parts = $weapon_parts[1] | string.split "[Apparel]"
+    $apparel_parts = (" " + $weapon_parts[1]) | string.split "[Apparel]"
     $weapon = $apparel_parts[0] | string.replace "|" "" | string.strip
 
     if $weapon == ""
@@ -319,9 +311,72 @@
     ret ($job_text | string.contains "Hunting") || ($job_text | string.contains "hunting") || ($job_text | string.contains "狩り") || ($job_text | string.contains "狩猟")
   end
 
-  # 現在の作業対象・手荷物・台に置いた材料から遺体だけを拾う。名前や作業名では判定しない。
-  # CorpseもThingなので、def.IsCorpseを確認してからInnerPawnを参照する。
-  func format_job_corpse_notes
+  # 作業対象となるpawnの種別を、プロンプト向けの短い表現へ変換する。
+  func get_job_target_pawn_kind
+    $target_pawn = $0
+    if $target_pawn == null || $target_pawn.RaceProps == null
+      ret ""
+    end
+
+    $race = $target_pawn.RaceProps
+    # Humanlike/Animalより異常存在を優先し、人間由来のグールなども区別する。
+    if $race.IsAnomalyEntity || $target_pawn.IsEntity || $target_pawn.IsMutant
+      ret "異常存在"
+    end
+    if $race.IsMechanoid
+      ret "メカノイド"
+    end
+    if $race.Humanlike
+      if $target_pawn.def != null && $target_pawn.def.defName == "Human"
+        ret "人間"
+      end
+      # HumanlikeにはMODの人型種族も含まれるため、Human以外は種族の表示名を使う。
+      if $target_pawn.def != null && $target_pawn.def.label != null && $target_pawn.def.label != ""
+        ret $target_pawn.def.label
+      end
+      ret "人型種族"
+    end
+    if $race.Animal
+      ret "動物"
+    end
+    ret ""
+  end
+
+  # 作業対象となるpawnの、プレイヤー陣営を基準とした立場と所属派閥を返す。
+  func get_job_target_pawn_standing
+    $target_pawn = $0
+    $faction_dict = $1
+    $faction_name = format_faction_name $target_pawn.faction $faction_dict
+
+    # 派閥を持たない人狩り状態も、現在はプレイヤー陣営への脅威として扱う。
+    $is_manhunter = false
+    if $target_pawn.RaceProps != null && $target_pawn.RaceProps.Animal && $target_pawn.MentalStateDef != null
+      $mental_state_name = $target_pawn.MentalStateDef.defName
+      $is_manhunter = $mental_state_name != null && ($mental_state_name | string.contains "Manhunter")
+    end
+
+    if $target_pawn.IsPrisoner
+      $standing = "囚人"
+    else if $target_pawn.IsSlave
+      $standing = "奴隷"
+    else if $target_pawn.IsColonist || ($target_pawn.HomeFaction != null && $target_pawn.HomeFaction.IsPlayer)
+      $standing = "プレイヤー陣営の仲間"
+    else if (IsEnemy $target_pawn) || $is_manhunter
+      $standing = "プレイヤー陣営に敵対"
+    else if $faction_name != ""
+      $standing = "プレイヤー陣営には非敵対"
+    else
+      $standing = "所属派閥なし"
+    end
+    if $faction_name != ""
+      $standing = $standing + "／所属派閥「" + $faction_name + "」"
+    end
+    ret $standing
+  end
+
+  # 現在照準中の対象・作業対象・手荷物・台に置いた材料から、生存pawnと遺体を拾う。
+  # 名前やp.jobの文面では判定せず、ThingDef.raceまたはThingDef.IsCorpseを使う。
+  func format_job_pawn_target_notes
     $pawn = $0
     $faction_dict = $1
     if $pawn == null || $pawn.CurJob == null
@@ -329,7 +384,7 @@
     end
 
     $job = $pawn.CurJob
-    $targets = [$job.targetA.Thing, $job.targetB.Thing, $job.targetC.Thing]
+    $targets = [$pawn.TargetCurrentlyAimingAt.Thing, $job.targetA.Thing, $job.targetB.Thing, $job.targetC.Thing]
     # 運搬途中は作業対象が運び先に変わる場合があるため、抱えているThingも確認する。
     if $pawn.carryTracker != null
       $targets[$targets.size] = $pawn.carryTracker.CarriedThing
@@ -347,68 +402,46 @@
     $seen_ids = []
     $notes = []
     for $target in $targets
-      if $target == null || $target.Destroyed || $target.def == null || !$target.def.IsCorpse
+      if $target == null || $target.Destroyed || $target.def == null
         continue
       end
-      $dead_pawn = $target.InnerPawn
-      if $dead_pawn == null || ($seen_ids | array.contains $target.thingIDNumber)
+
+      $is_corpse = $target.def.IsCorpse
+      $is_living_pawn = !$is_corpse && $target.def.race != null
+      if !$is_corpse && !$is_living_pawn
         continue
       end
-      # 同じ遺体が作業対象と手荷物などに重複しても、一度だけ表示する。
+
+      if $is_corpse
+        # CorpseもThingなので、遺体と確認した後にInnerPawnから元のpawnを取得する。
+        $target_pawn = $target.InnerPawn
+      else
+        $target_pawn = $target
+      end
+      if $target_pawn == null || ($is_living_pawn && $target_pawn.Dead) || $target.thingIDNumber == $pawn.thingIDNumber || ($seen_ids | array.contains $target.thingIDNumber)
+        continue
+      end
+      # 照準・JobTarget・手荷物などに同じThingが重複しても、一度だけ表示する。
       $seen_ids[$seen_ids.size] = $target.thingIDNumber
 
-      # 判定基準はプレイヤー陣営。囚人・奴隷を仲間と取り違えず、非敵対も同盟とは断定しない。
-      # 死亡時の外交関係ではなく、遺体のInnerPawnに残る所属と現在の関係を参照する。
-      $faction_name = format_faction_name $dead_pawn.faction $faction_dict
-      if $dead_pawn.IsPrisoner
-        $standing = "囚人"
-      else if $dead_pawn.IsSlave
-        $standing = "奴隷"
-      else if $dead_pawn.IsColonist || ($dead_pawn.HomeFaction != null && $dead_pawn.HomeFaction.IsPlayer)
-        $standing = "プレイヤー陣営の仲間"
-      else if IsEnemy $dead_pawn
-        $standing = "プレイヤー陣営に敵対"
-      else if $faction_name != ""
-        $standing = "プレイヤー陣営には非敵対"
-      else
-        $standing = "所属派閥なし"
+      $target_name = $target_pawn.name
+      if $target_name == null || $target_name == ""
+        $target_name = "名前不明のポーン"
       end
-      if $faction_name != ""
-        $standing = $standing + "／所属派閥「" + $faction_name + "」"
-      end
-
-      $dead_name = $dead_pawn.name
-      if $dead_name == null || $dead_name == ""
-        $dead_name = "名前不明のポーン"
-      end
-
-      # Humanlike/Animalより異常存在を優先する。IsMutantで人間由来のグールなども区別する。
-      # 派閥名では分類しないため、味方になった異常存在や改名された派閥でも種別を保てる。
-      $corpse_kind = ""
-      $race = $dead_pawn.RaceProps
-      if $race != null
-        if $race.IsAnomalyEntity || $dead_pawn.IsEntity || $dead_pawn.IsMutant
-          $corpse_kind = "異常存在"
-        else if $race.IsMechanoid
-          $corpse_kind = "メカノイド"
-        else if $race.Humanlike
-          # HumanlikeにはMODの人型種族も含まれるため、Human以外は種族の表示名を使う。
-          if $dead_pawn.def != null && $dead_pawn.def.defName == "Human"
-            $corpse_kind = "人間"
-          else if $dead_pawn.def != null && $dead_pawn.def.label != null && $dead_pawn.def.label != ""
-            $corpse_kind = $dead_pawn.def.label
-          else
-            $corpse_kind = "人型種族"
-          end
-        else if $race.Animal
-          $corpse_kind = "動物"
+      $target_kind = get_job_target_pawn_kind $target_pawn
+      if $is_corpse
+        if $target_kind != ""
+          $target_name = $target_name + "という" + $target_kind
         end
+        $target_description = $target_name + "の遺体"
+      else
+        if $target_kind == ""
+          $target_kind = "ポーン"
+        end
+        $target_description = $target_name + "という生存中の" + $target_kind
       end
-      # 判別できない場合は種別を推測せず、従来どおり名前と遺体だけを表示する。
-      if $corpse_kind != ""
-        $dead_name = $dead_name + "という" + $corpse_kind
-      end
-      $notes[$notes.size] = "作業対象の補足：" + $dead_name + "の遺体（" + $standing + "）"
+      $standing = get_job_target_pawn_standing $target_pawn $faction_dict
+      $notes[$notes.size] = "作業対象の補足：" + $target_description + "（" + $standing + "）"
     end
 
     ret $notes | array.join "\n"
@@ -435,7 +468,8 @@
       ret $environment_result
     end
 
-    $parts = $text | string.split ";"
+    # 空要素を落とすsplitで部屋名や温度の位置がずれないよう、各要素へ空白を補う。
+    $parts = (" " + ($text | string.replace ";" "; ")) | string.split ";"
     $location_type = $parts[0] | string.strip
     $result = ""
     $is_orbital = $weather_text != null && ($weather_text | string.contains "軌道上")
@@ -444,7 +478,7 @@
       $result = "区分：室内"
     else if $location_type | string.contains "外気"
       $result = "区分：屋外"
-    else
+    else if $location_type != ""
       $result = "区分：" + $location_type
     end
 
@@ -476,7 +510,8 @@
       $result = $result + " / マップイベント：" + $map_event_text
     end
 
-    ret $result
+    # 区分が欠けた入力では、後続情報の先頭に付いた区切りだけ除く。
+    ret $result | regex.replace "^ / " ""
   end
 
   # ===== カンマ区切り文字列の後処理（空要素・余分な空白の除去） =====
@@ -573,21 +608,6 @@
     ret (clean_list $result)
   end
 
-  # ===== メインの置換窓口 =====
-  # modeが"partial"の時だけ部分置換する。それ以外、または値・辞書がnullならそのまま返す。
-  func apply_replace
-    $value = $0
-    $dict = $1
-    $mode = $2
-    if $value == null || $dict == null
-      ret $value
-    end
-    if $mode == "partial"
-      ret (partial_replace $value $dict)
-    end
-    ret $value
-  end
-
   # ===== 健康情報専用の置換 =====
   # valueが空文字: keyを含むHediff項目全体を除外
   # valueが空以外: keyに一致した部分だけをvalueへ置換
@@ -615,9 +635,50 @@
     ret ($health_result | string.strip)
   end
 
-  # ===== RimTalkの健康情報から出血状態を抜き出す =====
-  # 例: "Health: Bleeding (severe, death in 19.2 hours), ..."
-  #  → "Bleeding (severe, death in 19.2 hours)"
+  # ===== 正確な残り時間を台詞で読み上げないよう、死亡予測を危険度表現へ変換 =====
+  # RimTalkは死亡まで24時間未満の場合に "death in ... minutes/hours" を付ける。
+  func blur_fatal_bleeding
+    $detail = $0
+    $death_marker = "death in "
+
+    if $detail == null || !($detail | string.contains $death_marker)
+      ret ""
+    end
+
+    $death_parts = (" " + $detail) | string.split $death_marker
+    if $death_parts.size < 2
+      ret "出血中（治療しなければ死亡する危険がある状態）"
+    end
+
+    $remaining_text = $death_parts[1] | string.strip
+    $remaining_hours = null
+    if $remaining_text | string.contains "minute"
+      $number_text = $remaining_text | string.replace "minutes" "" | string.replace "minute" "" | string.strip
+      $remaining_minutes = $number_text | string.to_float
+      if $remaining_minutes != null
+        $remaining_hours = $remaining_minutes / 60.0
+      end
+    else if $remaining_text | string.contains "hour"
+      $number_text = $remaining_text | string.replace "hours" "" | string.replace "hour" "" | string.strip
+      $remaining_hours = $number_text | string.to_float
+    end
+
+    if $remaining_hours == null || $remaining_hours < 0
+      ret "出血中（治療しなければ死亡する危険がある状態）"
+    end
+    if $remaining_hours <= 1
+      ret "出血中（失血死が目前に迫る危機的状態）"
+    end
+    if $remaining_hours <= 4
+      ret "出血中（失血死が間近に迫る極めて危険な状態）"
+    end
+    if $remaining_hours <= 12
+      ret "出血中（早急な治療が必要な重篤な状態）"
+    end
+    ret "出血中（治療しなければ近いうちに死亡する危険がある状態）"
+  end
+
+  # ===== RimTalkの健康情報から出血状態を抜き出し、時間をぼかして表示 =====
   func extract_bleeding_status
     $text = $0
     $marker = "Bleeding ("
@@ -632,12 +693,47 @@
       if for.index > 0
         $detail_parts = $part | string.split ")"
         if $detail_parts.size > 0 && $detail_parts[0] != ""
-          ret $marker + $detail_parts[0] + ")"
+          $detail = $detail_parts[0]
+          $fatal_status = blur_fatal_bleeding $detail
+          if $fatal_status != ""
+            ret $fatal_status
+          end
+
+          # 死亡予測がない場合も、既知の重症度だけ簡潔な日本語にする。
+          if $detail | string.contains "critical"
+            ret "出血中（極めて重度）"
+          end
+          if ($detail | string.contains "heavy") || ($detail | string.contains "severe") || ($detail | string.contains "extreme")
+            ret "出血中（重度）"
+          end
+          if $detail | string.contains "moderate"
+            ret "出血中（中程度）"
+          end
+          if ($detail | string.contains "minor") || ($detail | string.contains "trivial")
+            ret "出血中（軽度）"
+          end
+          ret "出血中"
         end
       end
     end
 
     ret ""
+  end
+
+  # ===== Hediffの正確な経過時間を、会話向けの大まかな表現へ変換 =====
+  func describe_hediff_age
+    $age_ticks = $0
+
+    if $age_ticks < 2500
+      ret "つい先ほど"
+    end
+    if $age_ticks < 15000
+      ret "数時間前"
+    end
+    if $age_ticks < 45000
+      ret "半日ほど前"
+    end
+    ret "一日ほど前"
   end
 
   # ===== 健康情報本文と、採用したHediffの置換前ラベル一覧をまとめて返す =====
@@ -664,7 +760,7 @@
 
         if $health_label != null && $health_label != ""
           $source_labels[$source_labels.size] = $hediff.LabelCap
-          $hours_ago = ($hediff.ageTicks / 2500) | math.round 1
+          $age_description = describe_hediff_age $hediff.ageTicks
           $entry = $health_label
 
           # 全身HediffはPartを持たないため、明示的に「全身」と表示する
@@ -674,7 +770,7 @@
             $entry = $entry + " (全身)"
           end
 
-          $entry = $entry + "(" + $hours_ago + "時間前)"
+          $entry = $entry + "(" + $age_description + ")"
           if $result != ""
             $result = $result + ", "
           end
@@ -683,7 +779,7 @@
       end
     end
 
-    # 出血要約は時間制限・除去辞書の対象外。RimTalkの重症度や死亡予測をそのまま保持する。
+    # 出血要約は時間制限・除去辞書の対象外。死亡予測の正確な時間は危険度表現へ変換する。
     $bleeding_status = extract_bleeding_status $health_text
     if $bleeding_status != ""
       if $result != ""
@@ -793,19 +889,18 @@
 
   # ===== フィールド1つ分を「危険度判定→置換→整形」まで一括処理 =====
   # 表示フラグ: falseなら非表示。trueまたはnullなら、値がある場合に表示する（危険時・狩猟時など）。
-  # dict, mode: 置換したい場合に指定（不要ならdict=null）
+  # dict: 部分置換したい場合に指定（不要ならdict=null）
   func prepare_field
     $label = $0
     $value = $1
     $danger = $2
     $dict = $3
-    $mode = $4
     
     if $danger != null && !$danger
       ret ""
     end
 
-    $value = apply_replace $value $dict $mode
+    $value = partial_replace $value $dict
     ret (add_line $label $value)
   end
 
@@ -1075,7 +1170,7 @@
   for p in prompt_pawns
     # マップの危険度 "High" "Low" "None"
     danger_flag = null
-    if p.map
+    if p.map != null && p.map.dangerWatcher != null
       rating = p.map.dangerWatcher.DangerRating
       if (rating | string.contains "High") || (rating | string.contains "Low")
         danger_flag = true
@@ -1109,11 +1204,17 @@
       end
       health_context = health_context + "攻撃元の補足：\n" + health_source_notes
     end
-    # 武器情報だけを残して半角括弧内を除く。表示対象時に武器がなければ明示する。
-    equipment_replace = partial_replace (extract_weapon p.equipment) replace_dict
-    equipment_clean = strip_parens equipment_replace
-    if equipment_display_flag != false && (equipment_clean == null || equipment_clean == "")
-      equipment_clean = "武器なし"
+    # IncludeEquipmentが無効なら、情報不足を「武器なし」と断定しない。
+    equipment_clean = ""
+    equipment_available = settings != null && settings.Context != null && settings.Context.IncludeEquipment == true
+    if equipment_available
+      weapon_text = extract_weapon p.equipment
+      if weapon_text == ""
+        equipment_clean = "武器なし"
+      else
+        # 置換後の空文字はそのまま非表示にし、「武器なし」へ置き換えない。
+        equipment_clean = strip_parens (partial_replace weapon_text replace_dict)
+      end
     end
 
     # 表示対象の欲求だけ抽出
@@ -1129,15 +1230,15 @@
     relations_filtered = filter_relations p.fullrelation prompt_pawns p.job
 
     # 作業用の不要語を除去してから、対象の補助説明を加える
-    job_clean = apply_replace p.job job_replace_dict "partial"
-    job_clean = apply_replace job_clean pawn_description_dict "partial"
-    # 辞書による名前の置換とは独立して、実物の遺体から取得した補足を最後に加える。
-    job_corpse_notes = format_job_corpse_notes p faction_display_dict
-    if job_corpse_notes != ""
+    job_clean = partial_replace p.job job_replace_dict
+    job_clean = partial_replace job_clean pawn_description_dict
+    # 辞書による名前の置換とは独立して、実際の生存pawn・遺体から取得した補足を最後に加える。
+    job_target_notes = format_job_pawn_target_notes p faction_display_dict
+    if job_target_notes != ""
       if job_clean != null && job_clean != ""
-        job_clean = job_clean + "\n" + job_corpse_notes
+        job_clean = job_clean + "\n" + job_target_notes
       else
-        job_clean = job_corpse_notes
+        job_clean = job_target_notes
       end
     end
 
@@ -1152,14 +1253,14 @@
     temp_context = ""
     temp_context = temp_context + p.name + " " + p.age + "歳" + " " + (partial_replace p.gender replace_dict) + "\n"
     # 性格タグは旧名・表示名のどちらでも反応できるよう、判定専用contextには両方を含める
-    temp_context = temp_context + (prepare_field "派閥"           (p.faction + " " + faction_clean) null null null)
-    temp_context = temp_context + (prepare_field "特性"           traits_filtered null       null    null)
-    temp_context = temp_context + (prepare_field "健康情報"       health_context   null null    null)
-    temp_context = temp_context + (prepare_field "装備"           equipment_clean equipment_display_flag null null)
-    temp_context = temp_context + (prepare_field "人物関係" relations_filtered null null null)
-    temp_context = temp_context + (prepare_field "欲求" thoughts_filtered null replace_dict "partial")
-    temp_context = temp_context + (prepare_field "場所"           location_clean  null       null    null)
-    temp_context = temp_context + (prepare_field "作業内容"       job_clean       null       null    null)
+    temp_context = temp_context + (prepare_field "派閥"           (p.faction + " " + faction_clean) null null)
+    temp_context = temp_context + (prepare_field "特性"           traits_filtered null       null)
+    temp_context = temp_context + (prepare_field "健康情報"       health_context   null null)
+    temp_context = temp_context + (prepare_field "装備"           equipment_clean equipment_display_flag null)
+    temp_context = temp_context + (prepare_field "人物関係" relations_filtered null null)
+    temp_context = temp_context + (prepare_field "欲求" thoughts_filtered null replace_dict)
+    temp_context = temp_context + (prepare_field "場所"           location_clean  null       null)
+    temp_context = temp_context + (prepare_field "作業内容"       job_clean       null       null)
     if UN_text != ""
       # {"キーワード"}の一致判定だけに使い、通常のUser情報欄には直接追加しない
       temp_context = temp_context + "\n" + UN_text
@@ -1171,16 +1272,16 @@
     # 3. 本番の block 組み立て（特殊シーンでは人物の基本設定だけを渡す）
     block = ""
     block = block + p.name + " " + p.age + "歳" + " " + (partial_replace p.gender replace_dict) + "\n"
-    block = block + (prepare_field "性格"           personality_clean null    null    null)
+    block = block + (prepare_field "性格"           personality_clean null    null)
     if UN_pawn == null
-      block = block + (prepare_field "派閥"           faction_clean   null       null    null)
-      block = block + (prepare_field "特性"           traits_filtered null       null    null)
-      block = block + (prepare_field "健康情報"       health_context   null null    null)
-      block = block + (prepare_field "装備"           equipment_clean equipment_display_flag null null)
-      block = block + (prepare_field "人物関係" relations_filtered null null null)
-      block = block + (prepare_field "欲求" thoughts_filtered null replace_dict "partial")
-      block = block + (prepare_field "場所"           location_clean  null       null    null)
-      block = block + (prepare_field "作業内容"       job_clean       null       null    null)
+      block = block + (prepare_field "派閥"           faction_clean   null       null)
+      block = block + (prepare_field "特性"           traits_filtered null       null)
+      block = block + (prepare_field "健康情報"       health_context   null null)
+      block = block + (prepare_field "装備"           equipment_clean equipment_display_flag null)
+      block = block + (prepare_field "人物関係" relations_filtered null null)
+      block = block + (prepare_field "欲求" thoughts_filtered null replace_dict)
+      block = block + (prepare_field "場所"           location_clean  null       null)
+      block = block + (prepare_field "作業内容"       job_clean       null       null)
     end
     # 出力
     block + "\n"
