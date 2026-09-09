@@ -6,8 +6,8 @@
 
 1. 新しいプロンプトプリセットを作成します。
 2. `JSON Format`・`Chat History`・`Dialogue Prompt`をオフにします。
-3. `Base Instruction`を[Base Instruction.txt](https://github.com/gabyounosabi/Scriban_ja/blob/main/Base%20Instruction.txt)の全文で置き換え、ロールを`System`にします。
-4. `Pawn Profiles`を[Pawn Profiles.txt](https://github.com/gabyounosabi/Scriban_ja/blob/main/Pawn%20Profiles.txt)の全文で置き換え、ロールを`User`にします。
+3. `Base Instruction`をBase Instruction.txtの全文で置き換え、ロールを`System`にします。
+4. `Context`をContext.txtの全文で置き換え、ロールを`User`にします。
 5. Rimtalkの設定を後述の画像に合わせます
 
 ### ペルソナで使える条件記法
@@ -39,7 +39,9 @@
 
 ## 注意事項
 
+- 正しくプロンプトを生成出来ているかは1度LLMに情報を送った後にプロンプト設定のプレビューを押すことで確認出来ます
 - **プレビュー画面ではテキスト生成に乱数を使用する関係でぷるぷるします**
+![プレビュー画面](images/preview.png)
 - 辞書編集の際は別のテキストエディタで編集し、先頭から末尾まで全文を貼り付けることをおすすめします。
 - エラー時はテンプレート本文がそのままプロンプトへ送られる場合があります。編集後はプレビューを確認してください。
 - 会話の自然さや指示への従いやすさは、使用するAIモデルによって変わります。（Gemini 3.5 Flash LiteがRPD 500でおすすめ）
