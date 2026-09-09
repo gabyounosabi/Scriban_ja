@@ -1,18 +1,25 @@
 {{~
-  # ===== 特殊シーン切り替え設定 =====
-  # NS_keywordとNS_genderはUser側にも複製されているため、変更時は必ず両方を揃える
-  # key: fullinteractionから検索する文字列
-  # value: 空なら一致行をそのまま使用し、値があれば一致行全体を置換する
-  NS_keyword = {
-    "キャッチボール": "",
-    "球技をして遊んだ": "ボールで遊んでいた",
+  # ===== UN（ユニークシーン）変数 =====
+  # UN_gender・UN_chance・UN_keywordはUser側にもあるため、変更時は必ず両方を揃える
+
+  # UNの対象性別："Male" / "Female" / "ALL"（性別を問わない）
+  UN_gender = "Female"
+
+  # 対象条件を満たした場合のUN発火率。0で無効、100で必ず発火する
+  UN_chance = 50
+
+  # UN発火時のSystem指示文。{name}は対象pawnの名前へ自動的に置換される
+  UN_instruction = "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
+
+  # ===== UNで検出するシーンの辞書 =====
+  # fullinteractionを行順に部分一致検索し、一致がなければ未置換のp.jobも検索する。
+  # valueが空文字なら一致した行をシーン説明に使用する（通常p.jobは1行）。
+  # valueに文章を入れると、取得した原文全体の代わりにその文章をシーン説明として使用する。
+  # 複数のkeyが同じ行に一致した場合は上に登録したkeyを優先する。辞書を空にするとUNは発火しない。
+  UN_keyword = {
+    "サッカーボール": "",
+    "バスケットボール": "",
   }
-
-  # "Male" / "Female" / "ALL"（性別を問わない）
-  NS_gender = "Female"
-
-  # {name}はNS対象のpawn名へ置換される
-  NS_instruction = "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
 
   # ===== プロンプトに表示する派閥名の変更 =====
   # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前
@@ -20,6 +27,21 @@
     "闇の存在": "異形",
   }
 
+  # ===== トレーダー種別名の変更 =====
+  # keyに部分一致した箇所をvalueへ置換する。包含関係がある場合は長いkeyを先に置く
+  trader_kind_replace_dict = {
+    "呪い商": "部族の闇行商",
+  }
+
+  # ===== 現在地のバイオームをSystemへ表示する確率 =====
+  # 0で非表示、100で常時表示。MODで追加されたバイオームにも同じ確率を適用する
+  biome_display_chance = 10
+
+  # 喧嘩終了後、このtick数以内だけ会話の口調へ怒りや気まずさを反映する。
+  # 怪我の由来表示はUser側で別管理。表示対象の健康情報と、40時間以内の喧嘩メモリがある間だけ表示する。
+  social_fight_aftermath_ticks = 2500
+
+  # 派閥名を前後の空白を除いて完全一致置換する。未登録・空の表示名なら元の名前を使う。
   func format_faction_name
     $faction_name = $0
     $dict = $1
@@ -31,8 +53,11 @@
     $original_name = $faction_name | string.strip
     if $dict != null
       $display_name = $dict[$original_name]
-      if $display_name != null && $display_name != ""
-        ret ($display_name | string.strip)
+      if $display_name != null
+        $display_name = $display_name | string.strip
+        if $display_name != ""
+          ret $display_name
+        end
       end
     end
 
@@ -47,7 +72,7 @@
   end
   player_faction_name = format_faction_name player_faction_name faction_display_dict
 
-  # fullinteractionから、キーワードを含む最初の1行を取得する
+  # 入力文字列から、辞書のkeyを含む最初の1行を取得する
   func find_interaction_line
     $interaction_text = $0
     $keyword_dict = $1
@@ -74,6 +99,21 @@
     end
 
     ret ""
+  end
+
+  # fullinteractionを優先し、見つからなければ現在のp.jobも同じ辞書で検索する。
+  # p.jobは通常1行だがfind_interaction_lineを共用でき、辞書valueの置換規則も統一される。
+  func find_UN_text
+    $interaction_text = $0
+    $job_text = $1
+    $keyword_dict = $2
+
+    $matched_text = find_interaction_line $interaction_text $keyword_dict
+    if $matched_text != ""
+      ret $matched_text
+    end
+
+    ret find_interaction_line $job_text $keyword_dict
   end
 
   # ctx.historyからAIが出力したtextだけを履歴として抽出する
@@ -108,11 +148,16 @@
     ret $result
   end
 
-  # 指定性別かつfullinteractionに指定語がある、最初のpawnを対象にする
-  func find_NS_pawn
+  # UN対象の最低生物学的年齢（以上）。User側と同じ値にする。
+  UN_min_age = 20
+
+  # 年齢・性別・キーワードが一致する最初のpawnと置換済みシーン文を返す。一致なしはnull。
+  # 戦闘・徴兵・確率の判定は呼び出し側で済ませ、一致文字列の再検索を避ける。
+  func find_UN_scene
     $pawn_list = $0
     $target_gender = $1
     $keyword_dict = $2
+    $min_age = $3
 
     if $target_gender == "" || $keyword_dict == null
       ret null
@@ -125,12 +170,35 @@
 
     # 複数pawnが一致しても最初の1人だけを採用する。ALLでもキーワード一致は必須
     for $pawn in $pawn_list
-      if ($target_gender == "ALL" || $pawn.gender == $target_gender) && (find_interaction_line $pawn.fullinteraction $keyword_dict) != ""
-        ret $pawn
+      # 年齢・性別を先に判定し、対象外pawnの文字列は走査しない
+      if $pawn.ageTracker != null && $pawn.ageTracker.AgeBiologicalYears >= $min_age && ($target_gender == "ALL" || $pawn.gender == $target_gender)
+        $scene_text = find_UN_text $pawn.fullinteraction $pawn.job $keyword_dict
+        if $scene_text != ""
+          ret {pawn: $pawn, text: $scene_text}
+        end
       end
     end
 
     ret null
+  end
+
+  # ===== UN専用のSystem/User同期抽選 =====
+  # 共有変数には依存せず、両テンプレートで共通のゲームTickと履歴長から同じ0～99を作る。
+  # 履歴長が変わると停止中でも結果が変わり得る。同じTick・履歴長なら同じ結果で、独立した乱数ではない。
+  func UN_synchronized_percent
+    $current_tick = $0
+    $history_text = $1
+    $history_size = 0
+    if $history_text != null
+      $history_size = $history_text | string.size
+    end
+
+    $seed = $current_tick + ($history_size * 7919)
+    $value = (($seed * 9301) + 49297) % 233280
+    if $value < 0
+      $value = $value + 233280
+    end
+    ret $value % 100
   end
 
   # ===== pawn名を「Abiko、Linda」の形に整形 =====
@@ -148,12 +216,237 @@
     ret $result
   end
 
-  # ===== マップ内の会話に影響しやすい存在を短くまとめる =====
-  # 地上の訪問トレーダーと、死亡・ダウンしていない敵対Pawnを対象にする
+  # 思考メモリの一覧を取得する。欲求・気分・メモリ機能を持たないpawnはnull。
+  func get_system_thought_memories
+    $pawn = $0
+    if $pawn == null || $pawn.needs == null || $pawn.needs.mood == null || $pawn.needs.mood.thoughts == null || $pawn.needs.mood.thoughts.memories == null
+      ret null
+    end
+    ret $pawn.needs.mood.thoughts.memories.Memories
+  end
+
+  # SocialFighting中の相手を返す。相手は会話参加者とは限らない。
+  func get_active_social_fight_partner
+    $pawn = $0
+    if $pawn != null && $pawn.MentalStateDef != null && $pawn.MentalStateDef.defName == "SocialFighting" && $pawn.MentalState != null
+      ret $pawn.MentalState.otherPawn
+    end
+    ret null
+  end
+
+  # 会話参加者のうち、最初に見つかった喧嘩中の一組を名前で返す。
+  func find_active_social_fight_pair
+    $pawn_list = $0
+    for $pawn in $pawn_list
+      $other_pawn = get_active_social_fight_partner $pawn
+      if $other_pawn != null
+        ret $pawn.name + "と" + $other_pawn.LabelShort
+      end
+    end
+    ret ""
+  end
+
+  # 参加者全員の相手付き喧嘩終了メモリから、指定tick数以内の最も新しい一組を返す。
+  func find_recent_social_fight_pair
+    $pawn_list = $0
+    $aftermath_ticks = $1
+    $best_pair = ""
+    $best_age = $aftermath_ticks + 1
+
+    for $pawn in $pawn_list
+      $memories = get_system_thought_memories $pawn
+      if $memories != null
+        for $memory in $memories
+          if $memory != null && $memory.def != null && ($memory.def.defName == "HadAngeringFight" || $memory.def.defName == "HadCatharticFight") && $memory.otherPawn != null && $memory.age <= $aftermath_ticks && $memory.age < $best_age
+            $best_age = $memory.age
+            $best_pair = $pawn.name + "と" + $memory.otherPawn.LabelShort
+          end
+        end
+      end
+    end
+
+    ret $best_pair
+  end
+
+  # 派閥敵対に加え、派閥を持たない人狩り状態もプレイヤー側への脅威として扱う。
+  func is_player_hostile_map_pawn
+    $map_pawn = $0
+    if $map_pawn == null
+      ret false
+    end
+    if IsEnemy $map_pawn
+      ret true
+    end
+    if $map_pawn.RaceProps != null && $map_pawn.RaceProps.Animal && $map_pawn.MentalStateDef != null
+      $mental_state_name = $map_pawn.MentalStateDef.defName
+      if $mental_state_name != null && ($mental_state_name | string.contains "Manhunter")
+        ret true
+      end
+    end
+    ret false
+  end
+
+  # ===== 集計対象の敵を絞る（死亡・ダウン・非活動・休眠・未探索の部屋を除外） =====
+  # EverSeenByPlayerはスタイル用Compの値なので使わない。
+  # Scribanから呼べないFogGrid.IsFoggedの代わりに、座標からRegion.Room.Foggedを参照する。
+  # Room.Foggedは部屋の代表セルの霧判定で、個体の厳密な視認判定やMOD独自の不可視判定ではない。
+  # Regionが取れない場合は視認状態を断定せず、活動状態など残りの条件で判定する。
+  func is_active_map_hostile
+    $map_pawn = $0
+    $current_map = $1
+    if $map_pawn == null || !$map_pawn.Spawned || $map_pawn.Dead || $map_pawn.Downed || !(is_player_hostile_map_pawn $map_pawn)
+      ret false
+    end
+    if $map_pawn.mindState != null && $map_pawn.mindState.Active == false
+      ret false
+    end
+    if $map_pawn.canBeDormant != null && !$map_pawn.canBeDormant.Awake
+      ret false
+    end
+
+    if $current_map != null && $current_map.regionGrid != null
+      $position = $map_pawn.Position
+      $map_size = $current_map.Size
+      if $position != null && $map_size != null && $position.x >= 0 && $position.z >= 0 && $position.x < $map_size.x && $position.z < $map_size.z
+        # CellToIndexと同じ添字。範囲確認後にのみ配列を参照する。
+        $cell_index = $position.z * $map_size.x + $position.x
+        $regions = $current_map.regionGrid.DirectGrid
+        if $regions != null && $cell_index < $regions.size
+          $region = $regions[$cell_index]
+          if $region != null && $region.valid && $region.Room != null && $region.Room.Fogged
+            ret false
+          end
+        end
+      end
+    end
+    ret true
+  end
+
+  # ===== 敵性生物の種類と匹数から、会話用の脅威段階を判定する =====
+  # プレイヤー入植者だけの会話を対象とし、集計対象にAnimal以外の種族が混在する場合は通常戦闘へ戻す。
+  # RaceProps.AnimalにはMOD独自種族も含まれ得るため、プロンプトでは「動物」と呼ばない。
+  func classify_creature_threat
+    $pawn_list = $0
+    $current_map = $1
+
+    if $current_map == null || $current_map.mapPawns == null || $pawn_list.size == 0
+      ret ""
+    end
+
+    for $participant in $pawn_list
+      if !$participant.IsFreeColonist
+        ret ""
+      end
+    end
+
+    $hostile_count = 0
+    $predator_count = 0
+    for $map_pawn in $current_map.mapPawns.AllPawnsSpawned
+      if is_active_map_hostile $map_pawn $current_map
+        if $map_pawn.RaceProps == null || !$map_pawn.RaceProps.Animal
+          ret ""
+        end
+
+        $hostile_count = $hostile_count + 1
+        if $map_pawn.RaceProps.predator
+          $predator_count = $predator_count + 1
+        end
+      end
+    end
+
+    if $hostile_count == 0
+      ret ""
+    end
+
+    # 規模のしきい値は捕食型・非捕食型で共通。捕食型の有無は表現だけに使う。
+    $class_prefix = "creature_"
+    if $predator_count == $hostile_count
+      $class_prefix = "predator_"
+    else if $predator_count > 0
+      $class_prefix = "mixed_creature_"
+    end
+
+    # RimWorldでは大きな群れも珍しくないため、1～9体は少数、10～29体は群れ、30体以上は大群とする。
+    if $hostile_count >= 30
+      ret $class_prefix + "large"
+    end
+    if $hostile_count >= 10
+      ret $class_prefix + "medium"
+    end
+    ret $class_prefix + "small"
+  end
+
+  # 脅威段階を、Systemプロンプトで使う中立的な表現へ変換する。
+  func creature_threat_phrase
+    $threat_class = $0
+    if $threat_class == "creature_small"
+      ret "少数の敵性生物による脅威"
+    end
+    if $threat_class == "creature_medium"
+      ret "敵性生物の群れによる脅威"
+    end
+    if $threat_class == "creature_large"
+      ret "敵性生物の大群による脅威"
+    end
+    if $threat_class == "predator_small"
+      ret "少数の捕食生物による脅威"
+    end
+    if $threat_class == "predator_medium"
+      ret "捕食生物の群れによる脅威"
+    end
+    if $threat_class == "predator_large"
+      ret "捕食生物の大群による脅威"
+    end
+    if $threat_class == "mixed_creature_small"
+      ret "捕食生物を含む少数の敵性生物による脅威"
+    end
+    if $threat_class == "mixed_creature_medium"
+      ret "捕食生物を含む敵性生物の群れによる脅威"
+    end
+    if $threat_class == "mixed_creature_large"
+      ret "捕食生物を含む敵性生物の大群による脅威"
+    end
+    ret ""
+  end
+
+  # 規模に応じて緊迫感を調整し、小規模な相手を絶体絶命として描写することを防ぐ。
+  func creature_threat_tone
+    $threat_class = $0
+    if $threat_class == "creature_small"
+      ret "警戒や対処中の慌ただしさは反映しつつ、絶体絶命・決死・鬼気迫る状況として過剰に描写しないでください。"
+    end
+    if $threat_class == "creature_medium" || $threat_class == "mixed_creature_medium"
+      ret "数への警戒と対処中の緊張感を反映してください。ただし、根拠なく絶望的な戦況にはしないでください。"
+    end
+    if $threat_class == "creature_large" || $threat_class == "mixed_creature_large"
+      ret "数に圧迫される強い緊張感と、包囲を避けながら対処する切迫感を反映してください。"
+    end
+    if $threat_class == "predator_small" || $threat_class == "mixed_creature_small"
+      ret "襲撃や接近への警戒を反映しつつ、少数の相手に過剰な絶望感を持たせないでください。"
+    end
+    if $threat_class == "predator_medium"
+      ret "捕食される危険と群れの接近に対する、強い警戒と緊張感を反映してください。"
+    end
+    if $threat_class == "predator_large"
+      ret "大群に取り囲まれる危険と、直ちに対処が必要な強い切迫感を反映してください。"
+    end
+    ret ""
+  end
+
+  # ===== マップ内の会話に影響しやすい情報を短くまとめる =====
+  # バイオーム、帰還を指示されていない地上トレーダー、is_active_map_hostileを満たす敵を対象にする。
+  # 呼び出し側でプレイヤー入植者のみの会話に限定する。
   func build_map_awareness
     $current_map = $0
+    $biome_chance = $1
+    $creature_threat_class = $2
     if $current_map == null || $current_map.mapPawns == null
       ret ""
+    end
+
+    $biome_name = ""
+    if $current_map.Biome != null && ($biome_chance >= 100 || ($biome_chance > 0 && (random 0 100) < $biome_chance))
+      $biome_name = $current_map.Biome.LabelCap | string.strip
     end
 
     $trader_kinds = ""
@@ -163,6 +456,11 @@
     for $map_pawn in $current_map.mapPawns.AllPawnsSpawned
       if $map_pawn.TraderKind != null && $map_pawn.mindState != null && !$map_pawn.mindState.traderDismissed
         $trader_kind = $map_pawn.TraderKind.LabelCap | string.strip
+        for $key in (trader_kind_replace_dict | object.keys)
+          if $key != ""
+            $trader_kind = $trader_kind | string.replace $key trader_kind_replace_dict[$key]
+          end
+        end
         $trader_kind_key = "|" + $trader_kind + "|"
         if $trader_kind != "" && !($trader_kind_keys | string.contains $trader_kind_key)
           if $trader_kinds != ""
@@ -173,12 +471,10 @@
         end
       end
 
-      if (IsEnemy $map_pawn) && !$map_pawn.Dead && !$map_pawn.Downed
+      if is_active_map_hostile $map_pawn $current_map
         # Pawn.FactionはRimTalkのmagic fieldで派閥名文字列として取得できる
         $faction_name = format_faction_name $map_pawn.faction faction_display_dict
-        if $faction_name == null || $faction_name == ""
-          $faction_name = "所属不明"
-        end
+        # 空文字のグループは派閥名を取得できない敵。架空の派閥名を付けず別表現にする。
 
         $current_count = $hostile_faction_counts[$faction_name]
         if $current_count == null
@@ -207,32 +503,146 @@
         $hostile_scale = "小規模の敵"
       end
 
-      $hostile_summary = $hostile_summary + "敵対派閥「" + $faction_name + "」：" + $hostile_scale
+      if $faction_name == ""
+        $hostile_summary = $hostile_summary + "所属派閥が確認できない" + $hostile_scale
+      else
+        $hostile_summary = $hostile_summary + "敵対派閥「" + $faction_name + "」：" + $hostile_scale
+      end
     end
 
     if $hostile_summary != ""
-      $result = "【重要：敵対勢力が活動中】\n現在のマップ上では、" + $hostile_summary + "が活動中です。平穏な日常会話にせず、存在する脅威への警戒と緊張感を最優先で反映してください。"
+      if $creature_threat_class != ""
+        $threat_phrase = creature_threat_phrase $creature_threat_class
+        $result = "【周辺の脅威】\n現在のマップ上では、" + $threat_phrase + "が活動中です。"
+      else
+        $result = "【重要：敵対勢力が活動中】\n現在のマップ上では、" + $hostile_summary + "が活動中です。平穏な日常会話にせず、存在する脅威への警戒と緊張感を最優先で反映してください。"
+      end
+      if $biome_name != ""
+        $result = $result + "\n- バイオーム：" + $biome_name
+      end
       if $trader_kinds != ""
         $result = $result + "\n- トレーダー：" + $trader_kinds + "が滞在中です。"
       end
       ret $result
     end
 
-    if $trader_kinds != ""
-      ret "【周辺状況】\n- トレーダー：" + $trader_kinds + "が滞在中です。"
+    if $biome_name != "" || $trader_kinds != ""
+      $result = "【周辺状況】"
+      if $biome_name != ""
+        $result = $result + "\n- バイオーム：" + $biome_name
+      end
+      if $trader_kinds != ""
+        $result = $result + "\n- トレーダー：" + $trader_kinds + "が滞在中です。"
+      end
+      ret $result
     end
 
     ret ""
   end
 
-  # ===== 人数に応じた基本指示 =====
+  # ===== 会話参加者が現在交戦中か判定 =====
+  # p.jobの攻撃表示を優先し、目前の近接脅威と「徴兵中 + 活動中のマップ脅威」を補助判定に使う。
+  # CombatantRecentlyは武器の所持だけでも成立し、anyCloseHostilesRecentlyは周辺の敵の
+  # 存在しか示さないため、「現在交戦中」の判定には使用しない。
+  func participants_in_active_combat
+    $pawn_list = $0
+    $current_map = $1
+
+    # DangerRatingはマップ全体のNone / Low / High。参加者自身の視認や交戦を保証する値ではない。
+    $map_has_active_danger = false
+    if $current_map != null && $current_map.dangerWatcher != null
+      $danger_rating = $current_map.dangerWatcher.DangerRating
+      $map_has_active_danger = $danger_rating == "Low" || $danger_rating == "High"
+    end
+
+    for $participant in $pawn_list
+      $job_text = $participant.job
+      if $job_text != null && (($job_text | string.contains "Attacking") || ($job_text | string.contains "攻撃中"))
+        ret true
+      end
+
+      if $participant.mindState != null && $participant.mindState.MeleeThreatStillThreat
+        ret true
+      end
+
+      # 危険なマップにいるだけでは戦闘中と断定せず、参加者自身が徴兵中の場合だけ補強材料にする。
+      if $map_has_active_danger && $participant.Drafted
+        ret true
+      end
+    end
+
+    ret false
+  end
+
+  # ===== 喧嘩中→戦闘中→喧嘩直後→通常の順で、人数・敵対関係に応じた基本指示を返す =====
   func build_base_instruction
     $pawn_list = $0
+    $in_active_combat = $1
+    $active_social_fight_pair = $2
+    $recent_social_fight_pair = $3
+    $creature_threat_class = $4
     $count = $pawn_list.size
     $formatted_names = format_pawn_names $pawn_list
 
     if $count == 0
       ret "あなたはロールプレイAIです。与えられた人物設定と状況に従って台詞を生成してください。"
+    end
+
+    # 社交喧嘩はMeleeThreatStillThreatを伴うため、通常戦闘より先に判定する。
+    if $active_social_fight_pair != ""
+      if $count == 1
+        ret "あなたはロールプレイAIです。" + $active_social_fight_pair + "は現在、些細な事で口論しています。【性格】を重視しつつ、" + $pawn_list[0].name + "の口論内容を生成してください。敵対派閥との戦闘として扱わないでください。"
+      end
+
+      if $count == 2
+        ret "あなたはロールプレイAIです。" + $active_social_fight_pair + "は現在、些細な事で口論しています。【性格】と二人の関係性を重視し、小さな口論を生成してください。敵対派閥との戦闘として扱わないでください。"
+      end
+
+      ret "あなたはロールプレイAIです。会話参加者のうち、" + $active_social_fight_pair + "は現在、些細な事で口論しています。【性格】と各人物の関係性を重視し、小さな口論を生成してください。敵対派閥との戦闘として扱わないでください。"
+    end
+
+    # 戦闘指示を冒頭へ組み込み、後段の周辺状況より強く会話内容へ反映させる。
+    if $in_active_combat
+      if $creature_threat_class != ""
+        $threat_phrase = creature_threat_phrase $creature_threat_class
+        $tone_instruction = creature_threat_tone $creature_threat_class
+        if $count == 1
+          ret "あなたはロールプレイAIです。" + $pawn_list[0].name + "は現在、" + $threat_phrase + "と戦闘中です。【性格】を重視しつつ、対処の最中に自然に漏れる独り言を生成してください。他者への返答ではなく、実際の状況に見合う口調にしてください。" + $tone_instruction
+        end
+
+        if $count == 2
+          ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、" + $threat_phrase + "と戦闘中です。【性格】と二人の関係性を重視しつつ、対処の最中に交わす自然な会話を生成してください。互いの発言を繋げ、実際の状況に見合う口調にしてください。" + $tone_instruction
+        end
+
+        ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、" + $threat_phrase + "と戦闘中です。【性格】と各人物の立場を重視しつつ、対処の最中に交わす自然な複数人会話を生成してください。全員が同じ脅威と状況を共有する会話にしてください。" + $tone_instruction
+      end
+
+      if $count == 1
+        ret "あなたはロールプレイAIです。" + $pawn_list[0].name + "は現在、敵対勢力との戦闘中です。【性格】を重視しつつ、戦闘の最中に自然に漏れる切迫した独り言を生成してください。他者への返答や、平穏な日常会話にはしないでください。"
+      end
+
+      if (classify_pawns $pawn_list) == "mixed"
+        ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、互いに敵対し交戦中です。【性格】と敵対関係を重視しつつ、戦闘の最中に交わす緊迫した対立会話を生成してください。"
+      end
+
+      if $count == 2
+        ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、敵対勢力との戦闘中です。【性格】と二人の関係性を重視しつつ、戦闘の最中に交わす切迫した自然な会話を生成してください。互いの発言を繋げ、平穏な日常会話にはしないでください。"
+      end
+
+      ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、敵対勢力との戦闘中です。【性格】と各人物の立場を重視しつつ、戦闘の最中に交わす緊迫した複数人会話を生成してください。全員が同じ脅威と戦況を共有する会話にしてください。"
+    end
+
+    # 喧嘩後に新たな敵対戦闘が始まっている場合は、現在の戦闘を優先する。
+    if $recent_social_fight_pair != ""
+      if $count == 1
+        ret "あなたはロールプレイAIです。" + $recent_social_fight_pair + "はつい先ほど口論を終えた直後です。【性格】を重視しつつ、" + $pawn_list[0].name + "の怒りや気まずさ、痛みが残る自然な独り言を生成してください。"
+      end
+
+      if $count == 2
+        ret "あなたはロールプレイAIです。" + $recent_social_fight_pair + "はつい先ほど口論を終えた直後です。【性格】と二人の関係性を重視し、怒りや気まずさ、痛みが残る自然な会話を生成してください。互いの発言が繋がるようにしてください。"
+      end
+
+      ret "あなたはロールプレイAIです。会話参加者のうち、" + $recent_social_fight_pair + "はつい先ほど口論を終えた直後です。【性格】と各人物の関係性を重視し、その気まずさや緊張を共有した自然な会話を生成してください。"
     end
 
     if $count == 1
@@ -256,7 +666,15 @@
     $player_faction_name = $1
     $current_map = $2
 
-    $base_instruction = build_base_instruction $pawn_list
+    $active_social_fight_pair = find_active_social_fight_pair $pawn_list
+    $recent_social_fight_pair = ""
+    if $active_social_fight_pair == ""
+      $recent_social_fight_pair = find_recent_social_fight_pair $pawn_list social_fight_aftermath_ticks
+    end
+
+    $in_active_combat = participants_in_active_combat $pawn_list $current_map
+    $creature_threat_class = classify_creature_threat $pawn_list $current_map
+    $base_instruction = build_base_instruction $pawn_list $in_active_combat $active_social_fight_pair $recent_social_fight_pair $creature_threat_class
 
     # ポーンごとの立場
     $pawn_role_extra = build_pawn_role_instructions $pawn_list $player_faction_name
@@ -274,7 +692,7 @@
       end
     end
     if $all_player_colonists && $current_map != null
-      $map_awareness = build_map_awareness $current_map
+      $map_awareness = build_map_awareness $current_map biome_display_chance $creature_threat_class
     end
 
     $result = $base_instruction
@@ -306,7 +724,8 @@
     end
 
     # 複数のBleeding表記がある場合も、死亡予測を含むものを順番に探す
-    $parts = $text | string.split $marker
+    # string.splitは空要素を捨てるため、冒頭がBleedingでも先頭の非対象要素を残す。
+    $parts = (" " + $text) | string.split $marker
     for $part in $parts
       if for.index > 0
         $detail_parts = $part | string.split ")"
@@ -377,7 +796,53 @@
     ret ""
   end
 
-  # ===== 全ポーンの立場を名前付きで列挙 =====
+  # ===== Systemの人物補足へ、装備中の武器名だけを追加する =====
+  # User側と同じく、マップが危険（Low/High）な時か狩猟中に表示する。マップ未取得時も表示対象。
+  # 衣服と半角括弧内の品質等は除く。武器情報がなければ「武器なし」と明示する。
+  # User側のreplace_dictは共有されないため、ここではゲーム上の武器名を使う。
+  func get_pawn_weapon_instruction
+    $pawn = $0
+    if $pawn == null
+      ret ""
+    end
+
+    $show_weapon = $pawn.map == null
+    if $pawn.map != null && $pawn.map.dangerWatcher != null
+      $rating = $pawn.map.dangerWatcher.DangerRating
+      $show_weapon = ($rating | string.contains "High") || ($rating | string.contains "Low")
+    end
+
+    if !$show_weapon
+      # User側のis_hunting_jobと同じ条件。徴兵だけでは表示を強制しない。
+      $is_hunting = $pawn.CurJob != null && $pawn.CurJob.def != null && $pawn.CurJob.def.defName == "Hunt"
+      $job_text = $pawn.job
+      if !$is_hunting && $job_text != null
+        $is_hunting = ($job_text | string.contains "Hunting") || ($job_text | string.contains "hunting") || ($job_text | string.contains "狩り") || ($job_text | string.contains "狩猟")
+      end
+      if !$is_hunting
+        ret ""
+      end
+    end
+
+    $equipment = $pawn.equipment
+    if $equipment == null || !($equipment | string.contains "[Weapon]")
+      ret "武器なし"
+    end
+    # splitは空要素を捨てるため、ラベルが先頭にあっても添字がずれないよう空白を補う。
+    $weapon_parts = (" " + $equipment) | string.split "[Weapon]"
+    if $weapon_parts.size < 2
+      ret "武器なし"
+    end
+    $apparel_parts = (" " + $weapon_parts[1]) | string.split "[Apparel]"
+    $weapon = $apparel_parts[0] | string.replace "|" ""
+    $weapon = $weapon | regex.replace "\\([^()]*\\)" "" | string.strip
+    if $weapon == ""
+      ret "武器なし"
+    end
+    ret "装備武器：" + $weapon
+  end
+
+  # ===== 全ポーンの立場・子供向け指示・表示対象の武器を、本人の名前付きで列挙 =====
   func build_pawn_role_instructions
     $pawn_list = $0
     $player_faction_name = $1
@@ -386,7 +851,7 @@
     for $pawn in $pawn_list
       $instruction = get_pawn_role_instruction $pawn $player_faction_name
 
-      # p.ageは表示用文字列なので、数値の生物学的年齢で子供かどうかを判定する
+      # p.ageは表示用文字列なので、数値の生物学的年齢で判定する
       if $pawn.ageTracker != null && $pawn.ageTracker.AgeBiologicalYears <= 12
         $child_instruction = "年齢相応の語彙・判断・感情反応を強く反映してください。"
 
@@ -395,6 +860,14 @@
         else
           $instruction = $child_instruction
         end
+      end
+
+      $weapon_instruction = get_pawn_weapon_instruction $pawn
+      if $weapon_instruction != ""
+        if $instruction != ""
+          $instruction = $instruction + " / "
+        end
+        $instruction = $instruction + $weapon_instruction
       end
 
       if $instruction != ""
@@ -410,9 +883,8 @@
   end
 
   # ===== 会話に登場する全pawnをチェックし、構成パターンを返す =====
-  # "mixed" = 敵と味方(またはそれ以外)が混在
-  # "all_enemy" = 全員敵
-  # "all_ally" = 全員味方/それ以外(敵がいない)
+  # プレイヤーに対するIsEnemyで分類する。参加者同士の派閥関係を総当たりで調べる処理ではない。
+  # "mixed" = 敵と非敵が混在 / "all_enemy" = 全員敵 / "all_ally" = 敵がいない（空リストも含む）
   func classify_pawns
     $pawn_list = $0
     $has_enemy = false
@@ -436,21 +908,43 @@
 
 ~}}
 {{~
-  NS_pawn = find_NS_pawn pawns NS_gender NS_keyword
-  NS_line = ""
+  UN_pawn = null
+  UN_scene = null
+  UN_line = ""
   ai_history = ""
+  # 戦闘中または参加者が徴兵中なら、UN抽選もfullinteraction・p.jobのキーワード走査も行わない。
+  UN_blocked_by_combat = participants_in_active_combat pawns map
+  UN_has_drafted_pawn = false
+  for UN_participant in pawns
+    if UN_participant.Drafted
+      UN_has_drafted_pawn = true
+      break
+    end
+  end
 
-  if NS_pawn != null
+  # setvar/getvarを使わず、System/Userで同じ入力から同じUN抽選値を得る。
+  # 戦闘・徴兵中や0%・100%では抽選自体が不要なため、番兵値100を使用する。
+  UN_roll = 100
+  if !UN_blocked_by_combat && !UN_has_drafted_pawn && UN_chance > 0 && UN_chance < 100
+    UN_roll = UN_synchronized_percent Find.TickManager.TicksGame ctx.history
+  end
+
+  if !UN_blocked_by_combat && !UN_has_drafted_pawn && (UN_chance >= 100 || (UN_chance > 0 && UN_roll < UN_chance))
+    UN_scene = find_UN_scene pawns UN_gender UN_keyword UN_min_age
+  end
+
+  if UN_scene != null
     # 通常の複数人処理を使わず、該当pawnだけの特殊プロンプトへ切り替える
-    prompt_pawns = [NS_pawn]
-    NS_line = find_interaction_line NS_pawn.fullinteraction NS_keyword
-    system_prompt = (NS_instruction | string.replace "{name}" NS_pawn.name) + NS_line
+    UN_pawn = UN_scene.pawn
+    prompt_pawns = [UN_pawn]
+    UN_line = UN_scene.text
+    system_prompt = (UN_instruction | string.replace "{name}" UN_pawn.name) + UN_line
     output_rules = "textは200文字程度"
   else
     prompt_pawns = pawns
     system_prompt = build_system_prompt prompt_pawns player_faction_name map
     output_rules = "発言はキャラ毎に1回のみ\ntextは200文字程度"
-    # 過去の会話履歴は通常モードだけで使用し、NS特殊シーンには混在させない
+    # 過去の会話履歴は通常モードだけで使用し、UN特殊シーンには混在させない
     ai_history = extract_ai_history ctx.history
   end
 
