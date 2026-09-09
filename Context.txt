@@ -1,0 +1,1185 @@
+{{~
+  # ===== UN（ユニークシーン）変数 =====
+  # UN_gender・UN_chance・UN_keywordはSystem側にもあるため、変更時は必ず両方を揃える
+
+  # UNの対象性別："Male" / "Female" / "ALL"（性別を問わない）
+  UN_gender = "Female"
+
+  # 対象条件を満たした場合のUN発火率。0で無効、100で必ず発火する
+  UN_chance = 50
+
+  # ===== UNで検出するシーンの辞書 =====
+  # fullinteractionを行順に部分一致検索し、一致がなければ未置換のp.jobも検索する。
+  # valueが空文字なら一致した行をシーン説明に使用する（通常p.jobは1行）。
+  # valueに文章を入れると、取得した原文全体の代わりにその文章をシーン説明として使用する。
+  # 複数のkeyが同じ行に一致した場合は上に登録したkeyを優先する。辞書を空にするとUNは発火しない。
+  UN_keyword = {
+    "サッカーボール": "",
+    "バスケットボール": "",
+  }
+
+  # ===== プロンプトに表示する派閥名の変更（System側と同じ値にする） =====
+  # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前
+  faction_display_dict = {
+    "闇の存在": "異形",
+  }
+
+  # ===== 除外/置換キーワード（key: 検索文字列, value: 置換後） 前半部分は消さないでください =====
+  # 通常項目は一致部分を置換・除去する。健康情報だけはvalueが空ならHediff項目全体を除去する。
+  # 空のkeyは無視する。作業内容にはこの辞書ではなく、下のjob_replace_dictを使う。
+  replace_dict = {
+    "Male": "男性",
+    "Female": "女性",
+    "Traits: ": "",
+    "Relations: ": "",
+    "Equipment: ": "",
+    "Memory: ": "",
+    "[Weapon]": "武器：",
+    "[Apparel]": "衣服：",
+    # ここから下は自由
+    "防弾チョッキ": "",
+    "不死": "",
+    "不老": "",
+    "メカリンク": "",
+    "豪華な宿舎": "",
+    "侵蝕された眼": "",
+    "制御不能な触手": "",
+    "再生 (": "",
+    "復活": "",
+  }
+
+  # ===== 作業内容専用の除去/置換（key: 検索文字列, value: 置換後） =====
+  # 一致部分だけを順に置換する。空のvalueはその部分を除去、空のkeyは無視する。
+  job_replace_dict = {
+    "traveling to: ": "",
+    "Traveling to: ": "",
+    "traveling to": "",
+    "Traveling to": "",
+  }
+
+  # ===== 作業対象・攻撃元の補助情報（key: 検索文字列, value: 表示文） =====
+  # 作業内容では一致箇所をvalueへ置換する。健康情報では、表示対象Hediffの置換前ラベルに
+  # keyがあればvalueをkeyごとに一度だけ補足する。除外したHediffからは補足しない。
+  pawn_description_dict = {
+    "パイクマン": "パイクマン：ニードルガンを装備した長距離戦闘用メカノイド",
+    "セントリードローン": "セントリードローン：スキャッターガンを装備した旧式の敵性メカ",
+  }
+
+  # ===== 表示する特性（key: 検索文字列, value: 表示名） =====
+  # keyへの部分一致で最初に一致したvalueを表示する。未登録・空のvalueは非表示、空のkeyは無視する。
+  trait_display_dict = {
+    "勤労者": "勤労者",
+  }
+
+  # ===== 欲求の表示確率 =====
+  # key: 部分一致する文字列
+  # value: 表示確率（0～100）
+  # 最初に一致したkeyの確率を使う。未登録の項目は表示せず、空のkeyは無視する。
+  thought_display_dict = {
+    "入植者が死んだ": 1,
+  }
+
+  # ===== 日常的な天候の表示確率 =====
+  # 完全一致した天候だけを確率表示する。未登録の特殊・危険な天候は常時表示する
+  weather_display_chance_dict = {
+    "快晴": 10,
+    "霧": 10,
+    "雨": 10,
+    "霧雨": 10,
+    "小雪": 10,
+  }
+
+  # ===== マップイベントの表示確率 =====
+  # keyはGameCondition本体の名前、valueは表示確率（0～100）。未登録のイベントは常時表示する
+  # 性別や強度が付くイベントも、本体名（例: "サイコドローン"）だけ登録すればよい
+  map_event_display_chance_dict = {
+    "オーロラ": 10,
+    "サイコスード": 10,
+    "サイコドローン": 10,
+  }
+
+  # 派閥名を前後の空白を除いて完全一致置換する。未登録・空の表示名なら元の名前を使う。
+  func format_faction_name
+    $faction_name = $0
+    $dict = $1
+
+    if $faction_name == null || $faction_name == ""
+      ret ""
+    end
+
+    $original_name = $faction_name | string.strip
+    if $dict != null
+      $display_name = $dict[$original_name]
+      if $display_name != null
+        $display_name = $display_name | string.strip
+        if $display_name != ""
+          ret $display_name
+        end
+      end
+    end
+
+    ret $original_name
+  end
+
+  # 入力文字列から、辞書のkeyを含む最初の1行を取得する。
+  func find_interaction_line
+    $interaction_text = $0
+    $keyword_dict = $1
+
+    if $interaction_text == null || $interaction_text == "" || $keyword_dict == null
+      ret ""
+    end
+
+    # fullinteractionの行順を優先する。同じ行に複数keyがある場合は辞書の登録順で最初のものを使う
+    # valueが空なら原文行、空でなければvalueだけを返す（部分置換ではなく行全体の置換）
+    for $line in ($interaction_text | SplitByLine)
+      $trimmed = $line | string.strip
+      if $trimmed != ""
+        for $key in ($keyword_dict | object.keys)
+          if $key != "" && ($trimmed | string.contains $key)
+            $replacement = $keyword_dict[$key]
+            if $replacement == null || $replacement == ""
+              ret $trimmed
+            end
+            ret $replacement
+          end
+        end
+      end
+    end
+
+    ret ""
+  end
+
+  # fullinteractionを優先し、見つからなければ現在のp.jobも同じ辞書で検索する。
+  # p.jobは通常1行だがfind_interaction_lineを共用でき、辞書valueの置換規則も統一される。
+  func find_UN_text
+    $interaction_text = $0
+    $job_text = $1
+    $keyword_dict = $2
+
+    $matched_text = find_interaction_line $interaction_text $keyword_dict
+    if $matched_text != ""
+      ret $matched_text
+    end
+
+    ret find_interaction_line $job_text $keyword_dict
+  end
+
+  # UN対象の最低生物学的年齢（以上）。System側と同じ値にする。
+  UN_min_age = 20
+
+  # 年齢・性別・キーワードが一致する最初のpawnと置換済みシーン文を返す。一致なしはnull。
+  # 戦闘・徴兵・確率の判定は呼び出し側で済ませ、一致文字列の再検索を避ける。
+  func find_UN_scene
+    $pawn_list = $0
+    $target_gender = $1
+    $keyword_dict = $2
+    $min_age = $3
+
+    if $target_gender == "" || $keyword_dict == null
+      ret null
+    end
+
+    $keys = $keyword_dict | object.keys
+    if $keys.size == 0
+      ret null
+    end
+
+    # 複数pawnが一致しても最初の1人だけを採用する。ALLでもキーワード一致は必須
+    for $pawn in $pawn_list
+      # 年齢・性別を先に判定し、対象外pawnの文字列は走査しない
+      if $pawn.ageTracker != null && $pawn.ageTracker.AgeBiologicalYears >= $min_age && ($target_gender == "ALL" || $pawn.gender == $target_gender)
+        $scene_text = find_UN_text $pawn.fullinteraction $pawn.job $keyword_dict
+        if $scene_text != ""
+          ret {pawn: $pawn, text: $scene_text}
+        end
+      end
+    end
+
+    ret null
+  end
+
+  # ===== UN専用のSystem/User同期抽選 =====
+  # 共有変数には依存せず、両テンプレートで共通のゲームTickと履歴長から同じ0～99を作る。
+  # 履歴長が変わると停止中でも結果が変わり得る。同じTick・履歴長なら同じ結果で、独立した乱数ではない。
+  func UN_synchronized_percent
+    $current_tick = $0
+    $history_text = $1
+    $history_size = 0
+    if $history_text != null
+      $history_size = $history_text | string.size
+    end
+
+    $seed = $current_tick + ($history_size * 7919)
+    $value = (($seed * 9301) + 49297) % 233280
+    if $value < 0
+      $value = $value + 233280
+    end
+    ret $value % 100
+  end
+
+  # ===== 会話参加者が現在交戦中か判定（System側と同じ条件） =====
+  # 狩猟中というだけでは成立せず、攻撃行動・目前の近接脅威・危険なマップでの徴兵を対象にする。
+  func participants_in_active_combat
+    $pawn_list = $0
+    $current_map = $1
+
+    $map_has_active_danger = false
+    if $current_map != null && $current_map.dangerWatcher != null
+      $danger_rating = $current_map.dangerWatcher.DangerRating
+      $map_has_active_danger = $danger_rating == "Low" || $danger_rating == "High"
+    end
+
+    for $participant in $pawn_list
+      $job_text = $participant.job
+      if $job_text != null && (($job_text | string.contains "Attacking") || ($job_text | string.contains "攻撃中"))
+        ret true
+      end
+
+      if $participant.mindState != null && $participant.mindState.MeleeThreatStillThreat
+        ret true
+      end
+
+      if $map_has_active_danger && $participant.Drafted
+        ret true
+      end
+    end
+
+    ret false
+  end
+
+  # ===== 半角の括弧内を除去する。単純な装備ラベル用で、入れ子の括弧の解析はしない =====
+  func strip_parens
+    $text = $0
+    $parts = $text | string.split "("
+    $result = ""
+    $first = true
+    for $part in $parts
+      if $first
+        $result = $result + $part
+        $first = false
+      else
+        $inner = $part | string.split ")"
+        if $inner.size > 1
+          $result = $result + ($inner | array.last)
+        end
+        # 分割結果に括弧後の要素がない場合は追加しない。閉じ括弧のない断片も捨てる。
+      end
+    end
+    ret ($result | string.strip)
+  end
+
+  # ===== 装備情報から武器部分だけを取得する =====
+  # 例: "[Weapon] ナイフ | [Apparel] Ｔシャツ" → "[Weapon] ナイフ"
+  func extract_weapon
+    $text = $0
+    if $text == null || $text == "" || !($text | string.contains "[Weapon]")
+      ret ""
+    end
+
+    # string.splitは空要素を捨てるため、先頭が[Weapon]でも前置き要素を残す。
+    $weapon_parts = (" " + $text) | string.split "[Weapon]"
+    if $weapon_parts.size < 2
+      ret ""
+    end
+    $apparel_parts = $weapon_parts[1] | string.split "[Apparel]"
+    $weapon = $apparel_parts[0] | string.replace "|" "" | string.strip
+
+    if $weapon == ""
+      ret ""
+    end
+
+    ret "[Weapon] " + $weapon
+  end
+
+  # ===== 現在の作業が狩猟か判定する =====
+  # JobDefがHuntなら成立。それ以外でも、MOD独自の狩猟を想定してp.jobの表記を補助的に使う。
+  func is_hunting_job
+    $pawn = $0
+    if $pawn == null
+      ret false
+    end
+
+    if $pawn.CurJob != null && $pawn.CurJob.def != null && $pawn.CurJob.def.defName == "Hunt"
+      ret true
+    end
+
+    $job_text = $pawn.job
+    if $job_text == null || $job_text == ""
+      ret false
+    end
+
+    ret ($job_text | string.contains "Hunting") || ($job_text | string.contains "hunting") || ($job_text | string.contains "狩り") || ($job_text | string.contains "狩猟")
+  end
+
+  # 現在の作業対象・手荷物・台に置いた材料から遺体だけを拾う。名前や作業名では判定しない。
+  # CorpseもThingなので、def.IsCorpseを確認してからInnerPawnを参照する。
+  func format_job_corpse_notes
+    $pawn = $0
+    $faction_dict = $1
+    if $pawn == null || $pawn.CurJob == null
+      ret ""
+    end
+
+    $job = $pawn.CurJob
+    $targets = [$job.targetA.Thing, $job.targetB.Thing, $job.targetC.Thing]
+    # 運搬途中は作業対象が運び先に変わる場合があるため、抱えているThingも確認する。
+    if $pawn.carryTracker != null
+      $targets[$targets.size] = $pawn.carryTracker.CarriedThing
+    end
+    # 解体などのレシピ作業中は、運搬済みの材料がplacedThingsに残る。
+    # 未着手のジョブや材料キューは走査せず、消費済み（Countが0）の材料も除外する。
+    if $job.placedThings != null
+      for $placed in $job.placedThings
+        if $placed != null && $placed.Count > 0
+          $targets[$targets.size] = $placed.thing
+        end
+      end
+    end
+
+    $seen_ids = []
+    $notes = []
+    for $target in $targets
+      if $target == null || $target.Destroyed || $target.def == null || !$target.def.IsCorpse
+        continue
+      end
+      $dead_pawn = $target.InnerPawn
+      if $dead_pawn == null || ($seen_ids | array.contains $target.thingIDNumber)
+        continue
+      end
+      # 同じ遺体が作業対象と手荷物などに重複しても、一度だけ表示する。
+      $seen_ids[$seen_ids.size] = $target.thingIDNumber
+
+      # 判定基準はプレイヤー陣営。囚人・奴隷を仲間と取り違えず、非敵対も同盟とは断定しない。
+      # 死亡時の外交関係ではなく、遺体のInnerPawnに残る所属と現在の関係を参照する。
+      $faction_name = format_faction_name $dead_pawn.faction $faction_dict
+      if $dead_pawn.IsPrisoner
+        $standing = "囚人"
+      else if $dead_pawn.IsSlave
+        $standing = "奴隷"
+      else if $dead_pawn.IsColonist || ($dead_pawn.HomeFaction != null && $dead_pawn.HomeFaction.IsPlayer)
+        $standing = "プレイヤー陣営の仲間"
+      else if IsEnemy $dead_pawn
+        $standing = "プレイヤー陣営に敵対"
+      else if $faction_name != ""
+        $standing = "プレイヤー陣営には非敵対"
+      else
+        $standing = "所属派閥なし"
+      end
+      if $faction_name != ""
+        $standing = $standing + "／所属派閥「" + $faction_name + "」"
+      end
+
+      $dead_name = $dead_pawn.name
+      if $dead_name == null || $dead_name == ""
+        $dead_name = "名前不明のポーン"
+      end
+
+      # Humanlike/Animalより異常存在を優先する。IsMutantで人間由来のグールなども区別する。
+      # 派閥名では分類しないため、味方になった異常存在や改名された派閥でも種別を保てる。
+      $corpse_kind = ""
+      $race = $dead_pawn.RaceProps
+      if $race != null
+        if $race.IsAnomalyEntity || $dead_pawn.IsEntity || $dead_pawn.IsMutant
+          $corpse_kind = "異常存在"
+        else if $race.IsMechanoid
+          $corpse_kind = "メカノイド"
+        else if $race.Humanlike
+          # HumanlikeにはMODの人型種族も含まれるため、Human以外は種族の表示名を使う。
+          if $dead_pawn.def != null && $dead_pawn.def.defName == "Human"
+            $corpse_kind = "人間"
+          else if $dead_pawn.def != null && $dead_pawn.def.label != null && $dead_pawn.def.label != ""
+            $corpse_kind = $dead_pawn.def.label
+          else
+            $corpse_kind = "人型種族"
+          end
+        else if $race.Animal
+          $corpse_kind = "動物"
+        end
+      end
+      # 判別できない場合は種別を推測せず、従来どおり名前と遺体だけを表示する。
+      if $corpse_kind != ""
+        $dead_name = $dead_name + "という" + $corpse_kind
+      end
+      $notes[$notes.size] = "作業対象の補足：" + $dead_name + "の遺体（" + $standing + "）"
+    end
+
+    ret $notes | array.join "\n"
+  end
+
+  # ===== 場所情報を一定の形式に整え、天候・外部環境を補う =====
+  # 温度は35℃以上または-10℃以下の場合だけ表示し、軌道上では表示しない
+  func format_location
+    $text = $0
+    $weather_text = $1
+    $map_event_text = $2
+
+    if $text == null || $text == ""
+      $environment_result = ""
+      if $weather_text != null && $weather_text != ""
+        $environment_result = "天候・外部環境：" + $weather_text
+      end
+      if $map_event_text != null && $map_event_text != ""
+        if $environment_result != ""
+          $environment_result = $environment_result + " / "
+        end
+        $environment_result = $environment_result + "マップイベント：" + $map_event_text
+      end
+      ret $environment_result
+    end
+
+    $parts = $text | string.split ";"
+    $location_type = $parts[0] | string.strip
+    $result = ""
+    $is_orbital = $weather_text != null && ($weather_text | string.contains "軌道上")
+
+    if $location_type | string.contains "室内"
+      $result = "区分：室内"
+    else if $location_type | string.contains "外気"
+      $result = "区分：屋外"
+    else
+      $result = "区分：" + $location_type
+    end
+
+    # p.locationの3要素目は部屋名
+    if $parts.size > 2
+      $room_name = $parts[2] | string.strip
+      if $room_name != ""
+        $result = $result + " / 部屋：" + $room_name
+      end
+    end
+
+    # p.locationの2要素目はpawn位置の実温度。会話に影響しやすい極端な時だけ残す
+    if $parts.size > 1 && !$is_orbital
+      $temperature_text = $parts[1] | string.strip
+      if $temperature_text != ""
+        $temperature_number_text = $temperature_text | string.replace "℃" "" | string.replace "°" "" | string.replace "C" "" | string.replace "c" "" | string.strip
+        $temperature_value = $temperature_number_text | string.to_float
+        if $temperature_value != null && ($temperature_value >= 35 || $temperature_value <= -10)
+          $result = $result + " / 温度：" + $temperature_text
+        end
+      end
+    end
+
+    if $weather_text != null && $weather_text != ""
+      $result = $result + " / 天候・外部環境：" + $weather_text
+    end
+
+    if $map_event_text != null && $map_event_text != ""
+      $result = $result + " / マップイベント：" + $map_event_text
+    end
+
+    ret $result
+  end
+
+  # ===== カンマ区切り文字列の後処理（空要素・余分な空白の除去） =====
+  func clean_list
+    $text = $0
+    $parts = $text | string.split ","
+    $result = ""
+    for $part in $parts
+      $trimmed = $part | string.strip
+      if $trimmed != ""
+        if $result != ""
+          $result = $result + ", "
+        end
+        $result = $result + $trimmed
+      end
+    end
+    ret $result
+  end
+  # ===== 関係情報を現在の会話に関係する人物だけに絞る（配偶者なども含む） =====
+  # 例:
+  #   "Relations: リンダ(妻), カーミラ(姉)" → "リンダ(妻), カーミラ(姉)"
+  #
+  # 以下のどちらかを満たす場合だけ残す
+  # ・名前が pawns 内に存在する
+  # ・名前が現在の p.job に含まれる
+  func filter_relations
+    $text = $0
+    $pawn_list = $1
+    $job_text = $2
+
+    if $text == null || $text == ""
+      ret ""
+    end
+
+    # 接頭辞を残すと「Relations: リンダ」とpawn名「リンダ」が一致しないため、比較前に除く。
+    $relation_text = $text | string.replace "Relations:" "" | string.strip
+    $parts = $relation_text | string.split ","
+    $result = ""
+
+    for $part in $parts
+      $relation = $part | string.strip
+
+      if $relation != ""
+
+        # "リンダ(妻)" → "リンダ"
+        $name_parts = $relation | string.split "("
+        $relation_name = $name_parts[0] | string.strip
+
+        $keep = false
+
+        # ===== 現在会話中のpawnにいるか =====
+        for $other_p in $pawn_list
+          if $other_p.name && $relation_name == ($other_p.name | string.strip)
+            $keep = true
+            break
+          end
+        end
+
+        # ===== 現在のjobに名前が含まれているか =====
+        if !$keep && $job_text && ($job_text | string.contains $relation_name)
+          $keep = true
+        end
+
+        # ===== 条件を満たした関係だけ追加 =====
+        if $keep
+          if $result != ""
+            $result = $result + ", "
+          end
+          $result = $result + $relation
+        end
+
+      end
+    end
+
+    ret $result
+  end
+
+  # ===== 部分置換（内部利用）。置換後にclean_listで整形 =====
+  # keyが重複・包含関係にある場合は登録順で結果が変わるため、具体的な長いkeyを先に置く
+  # 空のkeyはstring.replaceの例外になるため無視する。
+  func partial_replace
+    $text = $0
+    $dict = $1
+    if $text == null || $dict == null
+      ret $text
+    end
+    $result = $text
+    for $key in ($dict | object.keys)
+      if $key != ""
+        $keyword = $dict[$key]
+        $result = $result | string.replace $key $keyword
+      end
+    end
+    ret (clean_list $result)
+  end
+
+  # ===== メインの置換窓口 =====
+  # modeが"partial"の時だけ部分置換する。それ以外、または値・辞書がnullならそのまま返す。
+  func apply_replace
+    $value = $0
+    $dict = $1
+    $mode = $2
+    if $value == null || $dict == null
+      ret $value
+    end
+    if $mode == "partial"
+      ret (partial_replace $value $dict)
+    end
+    ret $value
+  end
+
+  # ===== 健康情報専用の置換 =====
+  # valueが空文字: keyを含むHediff項目全体を除外
+  # valueが空以外: keyに一致した部分だけをvalueへ置換
+  # 空のkeyは全項目一致や置換例外を避けるため無視する。
+  func replace_health_label
+    $health_text = $0
+    $health_dict = $1
+
+    if $health_text == null || $health_text == "" || $health_dict == null
+      ret $health_text
+    end
+
+    # simple function内の通常変数は呼び出し元と共有されるため、$付きのローカル変数を使う
+    $health_result = $health_text
+    for $health_key in ($health_dict | object.keys)
+      if $health_key != "" && ($health_result | string.contains $health_key)
+        $keyword = $health_dict[$health_key]
+        if $keyword == ""
+          ret ""
+        end
+        $health_result = $health_result | string.replace $health_key $keyword
+      end
+    end
+
+    ret ($health_result | string.strip)
+  end
+
+  # ===== RimTalkの健康情報から出血状態を抜き出す =====
+  # 例: "Health: Bleeding (severe, death in 19.2 hours), ..."
+  #  → "Bleeding (severe, death in 19.2 hours)"
+  func extract_bleeding_status
+    $text = $0
+    $marker = "Bleeding ("
+
+    if $text == null || $text == "" || !($text | string.contains $marker)
+      ret ""
+    end
+
+    # string.splitは空要素を捨てるため、冒頭がBleedingでも先頭の非対象要素を残す。
+    $parts = (" " + $text) | string.split $marker
+    for $part in $parts
+      if for.index > 0
+        $detail_parts = $part | string.split ")"
+        if $detail_parts.size > 0 && $detail_parts[0] != ""
+          ret $marker + $detail_parts[0] + ")"
+        end
+      end
+    end
+
+    ret ""
+  end
+
+  # ===== 健康情報本文と、採用したHediffの置換前ラベル一覧をまとめて返す =====
+  # GetHediffsの結果を時間・除去辞書で絞る。source_labelsは攻撃元の補足専用で、非表示項目を含めない。
+  func format_health_conditions
+    $pawn = $0
+    $threshold_ticks = $1
+    $current_game_ticks = $2
+    $health_text = $pawn.health
+    $result = ""
+    $source_labels = []
+
+    # RimTalk側の無効設定などでp.healthが空の場合は、独自に健康情報を追加しない。
+    if $health_text == null || $health_text == ""
+      ret {text: "", source_labels: []}
+    end
+
+    for $hediff in (GetHediffs $pawn)
+      # ageTicksから発生時点を推定し、ゲーム開始時以前のものと表示期間（呼び出し側で40時間）超過を除く。
+      # MODがageTicksを変更する場合や、途中生成されたpawnの先天的Hediffはこの条件だけでは区別できない。
+      if $hediff.ageTicks < $current_game_ticks && $hediff.ageTicks <= $threshold_ticks
+        # 空のvalueは項目全体の除外、それ以外は一致部分の置換に使う
+        $health_label = replace_health_label $hediff.LabelCap replace_dict
+
+        if $health_label != null && $health_label != ""
+          $source_labels[$source_labels.size] = $hediff.LabelCap
+          $hours_ago = ($hediff.ageTicks / 2500) | math.round 1
+          $entry = $health_label
+
+          # 全身HediffはPartを持たないため、明示的に「全身」と表示する
+          if $hediff.Part
+            $entry = $entry + " (" + $hediff.Part.Label + ")"
+          else
+            $entry = $entry + " (全身)"
+          end
+
+          $entry = $entry + "(" + $hours_ago + "時間前)"
+          if $result != ""
+            $result = $result + ", "
+          end
+          $result = $result + $entry
+        end
+      end
+    end
+
+    # 出血要約は時間制限・除去辞書の対象外。RimTalkの重症度や死亡予測をそのまま保持する。
+    $bleeding_status = extract_bleeding_status $health_text
+    if $bleeding_status != ""
+      if $result != ""
+        $result = $bleeding_status + ", " + $result
+      else
+        $result = $bleeding_status
+      end
+    end
+
+    ret {text: $result, source_labels: $source_labels}
+  end
+
+  # ===== 表示対象Hediffに登場する攻撃元の説明を、辞書keyごとに一度だけ追加する =====
+  # format_health_conditionsが採用した置換前ラベルを使い、除去した傷の補足だけが残ることを防ぐ。
+  func format_health_source_notes
+    $source_labels = $0
+    $description_dict = $1
+    $result = ""
+
+    if $source_labels == null || $source_labels.size == 0 || $description_dict == null
+      ret ""
+    end
+
+    for $key in ($description_dict | object.keys)
+      $description = $description_dict[$key]
+      if $key != "" && $description != null && $description != ""
+        for $source_label in $source_labels
+          if $source_label | string.contains $key
+            if $result != ""
+              $result = $result + "\n"
+            end
+            $result = $result + "- " + $description
+            break
+          end
+        end
+      end
+    end
+
+    ret $result
+  end
+
+  # ===== 直近の社交喧嘩の相手を取得する =====
+  # 指定tick数以内の相手付き喧嘩終了メモリから最新の相手を返す。怪我との厳密な照合は行わない。
+  # 該当メモリと、表示対象の健康情報（出血要約を含む）が両方ある時だけ
+  # 呼び出し側で由来説明を一文追加する。
+  func find_recent_social_fight_partner
+    $pawn = $0
+    $threshold_ticks = $1
+    if $pawn == null || $pawn.needs == null || $pawn.needs.mood == null || $pawn.needs.mood.thoughts == null || $pawn.needs.mood.thoughts.memories == null
+      ret null
+    end
+
+    $memories = $pawn.needs.mood.thoughts.memories.Memories
+    $best_partner = null
+    $best_age = $threshold_ticks + 1
+    for $memory in $memories
+      if $memory != null && $memory.def != null && ($memory.def.defName == "HadAngeringFight" || $memory.def.defName == "HadCatharticFight") && $memory.otherPawn != null && $memory.age <= $threshold_ticks
+        if $memory.age < $best_age
+          $best_age = $memory.age
+          $best_partner = $memory.otherPawn
+        end
+      end
+    end
+
+    ret $best_partner
+  end
+
+  # ===== 辞書に登録された特性だけを表示する =====
+  # keyは特性名への部分一致、valueは実際に表示する名前
+  func filter_traits
+    $trait_text = $0
+    $trait_dict = $1
+    $trait_result = ""
+
+    if $trait_text == null || $trait_text == "" || $trait_dict == null
+      ret ""
+    end
+
+    for $trait in ($trait_text | string.split ",")
+      $trimmed_trait = $trait | string.strip
+      for $trait_key in ($trait_dict | object.keys)
+        if $trimmed_trait != "" && $trait_key != "" && ($trimmed_trait | string.contains $trait_key)
+          $display_trait = $trait_dict[$trait_key] | string.strip
+          if $display_trait != ""
+            if $trait_result != ""
+              $trait_result = $trait_result + ", "
+            end
+            $trait_result = $trait_result + $display_trait
+          end
+          break
+        end
+      end
+    end
+
+    ret $trait_result
+  end
+
+  # ===== ラベル+値の1ブロックを作る。値がnull/空文字ならスキップ =====
+  func add_line
+    $label = $0
+    $value = $1
+    if $value != null && $value != ""
+      ret "【" + $label + "】\n" + $value + "\n"
+    end
+    ret ""
+  end
+
+  # ===== フィールド1つ分を「危険度判定→置換→整形」まで一括処理 =====
+  # 表示フラグ: falseなら非表示。trueまたはnullなら、値がある場合に表示する（危険時・狩猟時など）。
+  # dict, mode: 置換したい場合に指定（不要ならdict=null）
+  func prepare_field
+    $label = $0
+    $value = $1
+    $danger = $2
+    $dict = $3
+    $mode = $4
+    
+    if $danger != null && !$danger
+      ret ""
+    end
+
+    $value = apply_replace $value $dict $mode
+    ret (add_line $label $value)
+  end
+
+  # ===== 完全一致辞書に従って文字列を確率表示する =====
+  # 辞書にない文字列は重要な可能性があるため、そのまま表示する
+  func filter_by_exact_chance
+    $source_text = $0
+    $chance_dict = $1
+
+    if $source_text == null || $source_text == ""
+      ret ""
+    end
+
+    $trimmed = $source_text | string.strip
+    $chance = null
+    if $chance_dict != null
+      $chance = $chance_dict[$trimmed]
+    end
+
+    if $chance == null || $chance >= 100
+      ret $trimmed
+    end
+    if $chance <= 0
+      ret ""
+    end
+
+    if (random 0 100) < $chance
+      ret $trimmed
+    end
+
+    ret ""
+  end
+
+  # ===== 現在のマップで発生中のGameConditionを取得する =====
+  # 性別を絞り、完全な表示名→本体名の順で確率辞書を引く。抽選は呼び出しごと（pawnごと）に行う。
+  func format_map_events
+    $current_map = $0
+    $chance_dict = $1
+    $pawn_gender = $2
+
+    if $current_map == null || $current_map.gameConditionManager == null
+      ret ""
+    end
+
+    $result = ""
+    $seen_labels = {}
+    # マップ固有条件に加え、このマップにも作用する世界共通条件（Parent）を取得する
+    for $condition_manager in [$current_map.gameConditionManager, $current_map.gameConditionManager.Parent]
+      if $condition_manager != null
+        for $condition in $condition_manager.ActiveConditions
+          if $condition != null && !$condition.Expired
+            $label = $condition.LabelCap | string.strip
+
+            # 括弧の有無や位置には依存せず、表示名に性別文字列があれば該当するpawnにだけ表示する。
+            $gender_scan_label = $label | string.downcase
+            $targets_female = ($gender_scan_label | string.contains "女性") || ($gender_scan_label | string.contains "female")
+            # 英語のFemaleにはmaleが含まれるため、女性表記を除去した文字列で男性を判定する。
+            $male_scan_label = $gender_scan_label | string.replace "female" ""
+            $targets_male = ($male_scan_label | string.contains "男性") || ($male_scan_label | string.contains "male")
+            $gender_matches = (!$targets_female && !$targets_male) || ($targets_female && $pawn_gender == "Female") || ($targets_male && $pawn_gender == "Male")
+
+            $filtered_label = ""
+            if $gender_matches
+              # 性別・強度などの接尾情報がある場合も、GameCondition本体の名前で確率辞書を引けるようにする。
+              # 完全な表示名が辞書に登録されている場合は、従来どおりそちらを優先する。
+              $chance_lookup_label = $label
+              if $chance_dict != null && $chance_dict[$label] == null && $condition.def != null
+                $base_label = $condition.def.LabelCap | string.strip
+                if $chance_dict[$base_label] != null
+                  $chance_lookup_label = $base_label
+                end
+              end
+              if (filter_by_exact_chance $chance_lookup_label $chance_dict) != ""
+                $filtered_label = $label
+              end
+            end
+
+            if $filtered_label != "" && $seen_labels[$filtered_label] == null
+              if $result != ""
+                $result = $result + "、"
+              end
+              $result = $result + $filtered_label
+              $seen_labels[$filtered_label] = true
+            end
+          end
+        end
+      end
+    end
+
+    ret $result
+  end
+
+  # ===== 欲求を表示確率に従って抽出 =====
+  func filter_thoughts
+    $text = $0
+    $dict = $1
+
+    if $text == null || $text == "" || $dict == null
+      ret ""
+    end
+
+    $parts = $text | string.split ","
+    $result = ""
+
+    for $part in $parts
+      $trimmed = $part | string.strip
+      $show = false
+
+      for $key in ($dict | object.keys)
+        if $trimmed != "" && $key != "" && ($trimmed | string.contains $key)
+
+          $chance = $dict[$key]
+
+          if $chance >= 100
+            $show = true
+          else if $chance > 0 && (random 0 100) < $chance
+            $show = true
+          end
+
+          break
+        end
+      end
+
+      if $show
+        if $result != ""
+          $result = $result + ", "
+        end
+        $result = $result + $trimmed
+      end
+    end
+
+    ret $result
+  end
+
+  # ===== personalityに特殊文字列が含まれていた場合の処理 =====
+  # text: p.personalityそのもの
+  # context_text: {"キーワード"}判定用の人物情報。UN発火時だけ、取得・置換済みシーン文も含める。
+  # danger_flag: {!}判定に使うtrue/false
+  # UN_text: fullinteractionまたはp.jobから取得・置換したUN文字列。{UN}判定にも使う。
+  # 制約: 特殊構文は1行につき1個とし、本文中には追加の「}」を含めない
+  # 通常行に波括弧を使うと特殊構文と解釈されるため、人物設定では避ける
+  func check_personality
+    $text = $0
+    $context_text = $1
+    $danger = $2
+    $UN_text = $3
+
+    $split_text = $text | string.split "\n"
+    $result = ""
+
+    for $line in $split_text
+
+      if ($line | string.contains "{") && ($line | string.contains "}")
+
+        # ---- 1. 全ての"}"で分割し、先頭2要素をタグと本文として使う ----
+        # 例: {20%}実は趣味がある{END}
+        #  → parts[0] = "{20%"
+        #  → parts[1] = "実は趣味がある{END"
+        $parts = $line | string.split "}"
+
+        if $parts.size >= 2
+
+          $tag_part  = $parts[0]
+          $body_part = $parts[1]
+
+          # ---- 2. タグの中身だけ取り出す（先頭の "{" を削除） ----
+          $tag = $tag_part | string.replace "{" ""
+
+          # ---- 3. 本文だけ取り出す（末尾の "{END" を削除） ----
+          $body = $body_part | string.replace "{END" ""
+
+          $show_line = false
+
+          if $tag | string.contains "%"
+            # ===== パターンA: {20%}あいうえお{END} =====
+            # "20%" → "20" にしてから数値に変換
+            $percent_num = ($tag | string.replace "%" "") | string.to_int
+
+            if $percent_num >= 100 || ($percent_num > 0 && (random 0 100) < $percent_num)
+              $show_line = true
+            end
+
+          else
+            if $tag == "!"
+              # ===== パターンB: {!}あいうえお{END} =====
+              if $danger
+                $show_line = true
+              end
+            else if $tag == "UN"
+              # ===== パターンC: {UN}あいうえお{END} =====
+              # UNが発火し、fullinteractionまたはp.jobからシーン文を取得できた場合だけ表示する。
+              if $UN_text != null && $UN_text != ""
+                $show_line = true
+              end
+            else
+              # ===== パターンD: {"キーワード"}あいうえお{END} =====
+              $keyword = $tag | string.replace "\"" ""
+              if $context_text && ($context_text | string.contains $keyword)
+                $show_line = true
+              end
+            end
+          end
+
+          if $show_line
+            if $result != ""
+              $result = $result + "\n"
+            end
+            $result = $result + $body
+          end
+
+        end
+
+      else
+        # 特殊記法が含まれていない普通の行はそのまま出力
+        if $result != ""
+          $result = $result + "\n"
+        end
+        $result = $result + $line
+      end
+
+    end
+
+    ret $result
+  end
+
+
+~}}
+{{~
+
+  current_tick = Find.TickManager.TicksGame
+  # 天候は同一マップの全参加者で共通のため、pawnループの前で一度だけ取得する
+  weather_clean = filter_by_exact_chance weather weather_display_chance_dict
+
+  UN_pawn = null
+  UN_scene = null
+  UN_text = ""
+  # 戦闘中または参加者が徴兵中なら、UN抽選もfullinteraction・p.jobのキーワード走査も行わない。
+  UN_blocked_by_combat = participants_in_active_combat pawns map
+  UN_has_drafted_pawn = false
+  for UN_participant in pawns
+    if UN_participant.Drafted
+      UN_has_drafted_pawn = true
+      break
+    end
+  end
+
+  # setvar/getvarを使わず、System/Userで同じ入力から同じUN抽選値を得る。
+  UN_roll = 100
+  if !UN_blocked_by_combat && !UN_has_drafted_pawn && UN_chance > 0 && UN_chance < 100
+    UN_roll = UN_synchronized_percent current_tick ctx.history
+  end
+
+  if !UN_blocked_by_combat && !UN_has_drafted_pawn && (UN_chance >= 100 || (UN_chance > 0 && UN_roll < UN_chance))
+    UN_scene = find_UN_scene pawns UN_gender UN_keyword UN_min_age
+  end
+
+  if UN_scene != null
+    # 年齢・性別・キーワード・確率の全条件を通過し、戦闘・徴兵中でもない時だけUNへ切り替える。
+    # 通常の会話人数に関係なく、特殊シーンでは該当pawnだけを出力する
+    UN_pawn = UN_scene.pawn
+    prompt_pawns = [UN_pawn]
+    UN_text = UN_scene.text
+  else
+    prompt_pawns = pawns
+  end
+
+  for p in prompt_pawns
+    # マップの危険度 "High" "Low" "None"
+    danger_flag = null
+    if p.map
+      rating = p.map.dangerWatcher.DangerRating
+      if (rating | string.contains "High") || (rating | string.contains "Low")
+        danger_flag = true
+      else
+        danger_flag = false
+      end
+    end
+
+    # 武器は危険時に加え、狩猟対象へ移動中・狩猟中にも表示する
+    equipment_display_flag = danger_flag
+    if is_hunting_job p
+      equipment_display_flag = true
+    end
+
+    # 100000Tick（約40時間）以内に付与された健康状態
+    health_display_ticks = 100000
+    health_info = format_health_conditions p health_display_ticks current_tick
+    injuries = health_info.text
+    health_source_notes = format_health_source_notes health_info.source_labels pawn_description_dict
+    # 健康情報があり、40時間以内の喧嘩終了メモリも残っていれば、怪我の由来を一文だけ補う。
+    health_context = injuries
+    if injuries != ""
+      fight_injury_source = find_recent_social_fight_partner p health_display_ticks
+      if fight_injury_source != null
+        health_context = health_context + "\n現在" + p.name + "が負っている怪我の一部は、" + fight_injury_source.LabelShort + "との小さな口論で起きたものです。"
+      end
+    end
+    if health_source_notes != ""
+      if health_context != ""
+        health_context = health_context + "\n"
+      end
+      health_context = health_context + "攻撃元の補足：\n" + health_source_notes
+    end
+    # 武器情報だけを残して半角括弧内を除く。表示対象時に武器がなければ明示する。
+    equipment_replace = partial_replace (extract_weapon p.equipment) replace_dict
+    equipment_clean = strip_parens equipment_replace
+    if equipment_display_flag != false && (equipment_clean == null || equipment_clean == "")
+      equipment_clean = "武器なし"
+    end
+
+    # 表示対象の欲求だけ抽出
+    thoughts_filtered = filter_thoughts p.thoughts thought_display_dict
+
+    # 辞書に登録された特性だけ抽出し、辞書のvalueで表示名を整える
+    traits_filtered = filter_traits p.traits trait_display_dict
+
+    # ゲーム内部の所属は変えず、プロンプトに表示する派閥名だけを変更する
+    faction_clean = format_faction_name p.faction faction_display_dict
+
+    # 現在の会話参加者、または作業対象に関係する人物関係だけを抽出
+    relations_filtered = filter_relations p.fullrelation prompt_pawns p.job
+
+    # 作業用の不要語を除去してから、対象の補助説明を加える
+    job_clean = apply_replace p.job job_replace_dict "partial"
+    job_clean = apply_replace job_clean pawn_description_dict "partial"
+    # 辞書による名前の置換とは独立して、実物の遺体から取得した補足を最後に加える。
+    job_corpse_notes = format_job_corpse_notes p faction_display_dict
+    if job_corpse_notes != ""
+      if job_clean != null && job_clean != ""
+        job_clean = job_clean + "\n" + job_corpse_notes
+      else
+        job_clean = job_corpse_notes
+      end
+    end
+
+    # 対象性別を持つイベントがあるため、マップイベントはpawnごとに絞り込む
+    map_events_clean = format_map_events map map_event_display_chance_dict p.gender
+
+    # 発生中の天候・マップイベントを、pawnごとの場所へ補足する
+    location_clean = format_location p.location weather_clean map_events_clean
+
+    # 1. 性格の条件タグを判定するため、最終出力と同じ材料から検索専用contextを先に作る
+    # 下のblock組み立てと一部重複するが、性格を所定位置へ出すために必要な2段階処理
+    temp_context = ""
+    temp_context = temp_context + p.name + " " + p.age + "歳" + " " + (partial_replace p.gender replace_dict) + "\n"
+    # 性格タグは旧名・表示名のどちらでも反応できるよう、判定専用contextには両方を含める
+    temp_context = temp_context + (prepare_field "派閥"           (p.faction + " " + faction_clean) null null null)
+    temp_context = temp_context + (prepare_field "特性"           traits_filtered null       null    null)
+    temp_context = temp_context + (prepare_field "健康情報"       health_context   null null    null)
+    temp_context = temp_context + (prepare_field "装備"           equipment_clean equipment_display_flag null null)
+    temp_context = temp_context + (prepare_field "人物関係" relations_filtered null null null)
+    temp_context = temp_context + (prepare_field "欲求" thoughts_filtered null replace_dict "partial")
+    temp_context = temp_context + (prepare_field "場所"           location_clean  null       null    null)
+    temp_context = temp_context + (prepare_field "作業内容"       job_clean       null       null    null)
+    if UN_text != ""
+      # {"キーワード"}の一致判定だけに使い、通常のUser情報欄には直接追加しない
+      temp_context = temp_context + "\n" + UN_text
+    end
+
+    # 2. 仮文脈を使って性格（personality）の条件分岐・構文解析を実行
+    personality_clean = check_personality p.personality temp_context danger_flag UN_text
+
+    # 3. 本番の block 組み立て（特殊シーンでは人物の基本設定だけを渡す）
+    block = ""
+    block = block + p.name + " " + p.age + "歳" + " " + (partial_replace p.gender replace_dict) + "\n"
+    block = block + (prepare_field "性格"           personality_clean null    null    null)
+    if UN_pawn == null
+      block = block + (prepare_field "派閥"           faction_clean   null       null    null)
+      block = block + (prepare_field "特性"           traits_filtered null       null    null)
+      block = block + (prepare_field "健康情報"       health_context   null null    null)
+      block = block + (prepare_field "装備"           equipment_clean equipment_display_flag null null)
+      block = block + (prepare_field "人物関係" relations_filtered null null null)
+      block = block + (prepare_field "欲求" thoughts_filtered null replace_dict "partial")
+      block = block + (prepare_field "場所"           location_clean  null       null    null)
+      block = block + (prepare_field "作業内容"       job_clean       null       null    null)
+    end
+    # 出力
+    block + "\n"
+    
+
+  end
+~}}
+
+{{~~}}
