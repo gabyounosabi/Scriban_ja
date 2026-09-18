@@ -11,26 +11,50 @@
   # UN発火時のSystem指示文。{name}は対象pawnの名前へ自動的に置換される
   UN_instruction = "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
 
+  # ===== 辞書の共通書式 =====
+  # "検索キー": { value: "置換・表示する文字列", chance: 100 }
+  # 左側の文字列がkey（検索語）、valueが置換・表示する文字列、chanceが表示・採用確率。
+  # chanceは0～100。0では必ず落選、100では必ず当選する。
+  # 当選時は指定の置換を必ず行い、落選時は対象の表示・採用を見送る。対象範囲とvalue=""の意味は各辞書を参照。
+  # 旧書式（文字列だけ／確率だけ）も読み込めるが、新しく追加する項目は上の書式に統一する。
+
   # ===== UNで検出するシーンの辞書 =====
   # fullinteractionを行順に部分一致検索し、一致がなければ未置換のp.jobも検索する。
-  # valueが空文字なら一致した行をシーン説明に使用する（通常p.jobは1行）。
-  # valueに文章を入れると、取得した原文全体の代わりにその文章をシーン説明として使用する。
-  # 複数のkeyが同じ行に一致した場合は上に登録したkeyを優先する。辞書を空にするとUNは発火しない。
+  # valueが空なら一致した原文行を使用し、文章を入れると原文行全体をその文章へ置き換える。
+  # chanceはそのkeyを採用する確率。UN_chanceの抽選も通る必要がある（50と50なら概ね25%）。
+  # 同じkeyの落選は他の行・p.job・別pawnでも再抽選しない。採用可能なkeyのうち行順・登録順を優先する。
+  # 辞書を空にするとUNは発火しない。System/Userでは辞書の内容も同じにする。
   UN_keyword = {
-    "サッカーボール": "",
-    "バスケットボール": "",
+    "サッカーボール": { value: "", chance: 100 },
+    "バスケットボール": { value: "", chance: 100 },
   }
 
   # ===== プロンプトに表示する派閥名の変更 =====
-  # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前
+  # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前。
+  # chanceは派閥名の表示確率。落選時は名前を省き、当選時はvalueの名前を使う（空なら元の名前）。
+  # System/Userで同じ抽選結果を使う。名前の表示有無は所属・敵味方の判定に影響しない。
+  # プレイヤー派閥名を省く場合は「プレイヤー陣営」と表記し、敵の警告は名前なしでも表示する。
   faction_display_dict = {
-    "闇の存在": "異形",
+    "闇の存在": { value: "異形", chance: 100 },
+    "古代人": { value: "古代の機械文明", chance: 100 },
+  }
+
+  # ===== 襲撃対象の補助情報 =====
+  # マップ上の敵構成に含まれる種別名へkeyで部分一致し、一致部分をvalueへ置換する。
+  # chanceは一致した種別名の表示確率。当選時は必ず置換し、落選時はその種別名だけを省く。
+  # valueが空なら一致部分だけを除去する。種別名を省いても、敵の大分類と脅威の警告は残す。
+  # User側のpawn_description_dictと同じ内容にする。
+  pawn_description_dict = {
+    "パイクマン": { value: "パイクマン：ニードルガンを装備した長距離戦闘用メカノイド", chance: 100 },
+    "セントリードローン": { value: "セントリードローン：スキャッターガンを装備した旧式の敵性メカ", chance: 100 },
+    "ハイブクイーン": { value: "ハイブクイーン：巨大な体格を持つ虫の女王", chance: 100 },
   }
 
   # ===== トレーダー種別名の変更 =====
-  # keyに部分一致した箇所をvalueへ置換する。包含関係がある場合は長いkeyを先に置く
+  # chanceは種別情報の表示確率。当選時は必ず一致部分をvalueへ置換し、空なら一致部分を除去する。
+  # 落選時は該当種別の滞在情報を非表示にする。同じ種別名は一度だけ抽選する。長いkeyを先に置く。
   trader_kind_replace_dict = {
-    "呪い商": "部族の闇行商",
+    "呪い商": { value: "部族の闇行商", chance: 100 },
   }
 
   # ===== 現在地のバイオームをSystemへ表示する確率 =====
@@ -41,36 +65,129 @@
   # 怪我の由来表示はUser側で別管理。表示対象の健康情報と、40時間以内の喧嘩メモリがある間だけ表示する。
   social_fight_aftermath_ticks = 2500
 
-  # 派閥名を前後の空白を除いて完全一致置換する。未登録・空の表示名なら元の名前を使う。
+  # 1回のテンプレート生成で共通の入力を使い、途中でTickや履歴を読み直さない。
+  current_tick = Find.TickManager.TicksGame
+  prompt_history = ctx.history
+
+  # ===== UN・派閥名のSystem/User同期抽選 =====
+  # 同じTick・履歴長・用途キーなら同じ0～99になり、外部の保存状態には依存しない。
+  # 第3引数を省略したUN全体の抽選は、以前と同じ入力・計算結果を維持する。
+  func synchronized_percent
+    $current_tick = $0
+    $history_text = $1
+    $scope = $2
+    $history_size = 0
+    if $history_text != null
+      $history_size = $history_text | string.size
+    end
+
+    # 大きな整数の乗算や下位桁への依存を避け、Scriban標準のSHA-256で入力を混ぜる。
+    # 先頭6桁だけ数値化するため、途中計算も最大16,777,215で桁あふれしない。
+    $seed_text = "" + $current_tick + ":" + $history_size
+    if $scope != null && $scope != ""
+      $seed_text = $seed_text + ":" + $scope
+    end
+    $hash = $seed_text | string.sha256
+    $hex_digits = {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "a": 10, "b": 11, "c": 12, "d": 13, "e": 14, "f": 15}
+    $value = 0
+    for $i in 0..5
+      $digit = $hash | string.slice $i 1
+      $value = $value * 16 + $hex_digits[$digit]
+    end
+    ret $value % 100
+  end
+
+  # valueを取得する。旧名keywordも互換用に受け付け、両方あれば空文字を含めvalueを優先する。
+  # 旧書式の文字列はそのまま、確率だけなら空文字として扱う。
+  func dictionary_value
+    $rule = $0
+    if ($rule | object.typeof) == "string"
+      ret $rule
+    end
+    if ($rule | object.typeof) == "object"
+      if $rule.value != null
+        ret "" + $rule.value
+      end
+      if $rule.keyword != null
+        ret "" + $rule.keyword
+      end
+    end
+    ret ""
+  end
+
+  # 新書式のchance、または旧書式の数値を取得する。省略時は100、不正な数値やnull項目は0。
+  func dictionary_chance
+    $rule = $0
+    if $rule == null
+      ret 0
+    end
+    $raw_chance = 100
+    if ($rule | object.typeof) == "number"
+      $raw_chance = $rule
+    else if ($rule | object.typeof) == "object" && $rule.chance != null
+      $raw_chance = $rule.chance
+    end
+    $chance = ("" + $raw_chance) | string.to_float
+    if $chance == null
+      ret 0
+    end
+    ret $chance
+  end
+
+  # 通常はRimTalkのrandomで抽選。同期キーを渡すUN・派閥名だけは両テンプレートで同じ結果にする。
+  # 0/100では乱数を消費しない。同期キーは用途と検索キーから作り、UN全体の抽選とも分離する。
+  func dictionary_rule_passes
+    $rule = $0
+    $sync_key = $1
+    $chance = dictionary_chance $rule
+    if $chance <= 0
+      ret false
+    end
+    if $chance >= 100
+      ret true
+    end
+    if $sync_key != null && $sync_key != ""
+      $roll = synchronized_percent current_tick prompt_history $sync_key
+    else
+      $roll = random 0 100
+    end
+    ret $roll < $chance
+  end
+
+  # 派閥名の表示を完全一致辞書で決める。落選時は空文字、当選時は置換後の名前を返す。
+  # 未登録または当選してvalueが空なら元の名前。空文字を「所属なし」の判定には使わない。
   func format_faction_name
     $faction_name = $0
     $dict = $1
-
     if $faction_name == null || $faction_name == ""
       ret ""
     end
-
     $original_name = $faction_name | string.strip
-    if $dict != null
-      $display_name = $dict[$original_name]
-      if $display_name != null
-        $display_name = $display_name | string.strip
+    if $dict != null && $original_name != ""
+      $rule = $dict[$original_name]
+      if $rule != null
+        if !(dictionary_rule_passes $rule ("faction:" + $original_name))
+          ret ""
+        end
+        $display_name = (dictionary_value $rule) | string.strip
         if $display_name != ""
           ret $display_name
         end
       end
     end
-
     ret $original_name
   end
 
   # ===== プレイヤー派閥名 =====
-  # 通常のゲーム中はFind経由で取得し、取得不能時だけ汎用名へフォールバックする
+  # Find経由で取得し、取得不能・辞書の表示抽選で落選した場合は汎用名を使う。
   player_faction_name = "プレイヤー陣営"
   if Find.FactionManager != null && Find.FactionManager.OfPlayer != null
     player_faction_name = Find.FactionManager.OfPlayer.Name
   end
   player_faction_name = format_faction_name player_faction_name faction_display_dict
+  if player_faction_name == ""
+    player_faction_name = "プレイヤー陣営"
+  end
 
   # 入力文字列から、辞書のkeyを含む最初の1行を取得する
   func find_interaction_line
@@ -82,13 +199,17 @@
     end
 
     # fullinteractionの行順を優先する。同じ行に複数keyがある場合は辞書の登録順で最初のものを使う
-    # valueが空なら原文行、空でなければvalueだけを返す（部分置換ではなく行全体の置換）
+    # valueが空なら原文行、空でなければvalueだけを返す（行全体の置換）。
     for $line in ($interaction_text | SplitByLine)
       $trimmed = $line | string.strip
       if $trimmed != ""
         for $key in ($keyword_dict | object.keys)
           if $key != "" && ($trimmed | string.contains $key)
-            $replacement = $keyword_dict[$key]
+            $rule = $keyword_dict[$key]
+            if !(dictionary_rule_passes $rule ("UN:" + $key))
+              continue
+            end
+            $replacement = dictionary_value $rule
             if $replacement == null || $replacement == ""
               ret $trimmed
             end
@@ -180,30 +301,6 @@
     end
 
     ret null
-  end
-
-  # ===== UN専用のSystem/User同期抽選 =====
-  # 共有変数には依存せず、両テンプレートで共通のゲームTickと履歴長から同じ0～99を作る。
-  # 履歴長が変わると停止中でも結果が変わり得る。同じTick・履歴長なら同じ結果で、独立した乱数ではない。
-  func UN_synchronized_percent
-    $current_tick = $0
-    $history_text = $1
-    $history_size = 0
-    if $history_text != null
-      $history_size = $history_text | string.size
-    end
-
-    # 大きな整数の乗算や下位桁への依存を避け、Scriban標準のSHA-256で入力を混ぜる。
-    # 先頭6桁だけ数値化するため、途中計算も最大16,777,215で桁あふれしない。
-    $seed_text = "" + $current_tick + ":" + $history_size
-    $hash = $seed_text | string.sha256
-    $hex_digits = {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "a": 10, "b": 11, "c": 12, "d": 13, "e": 14, "f": 15}
-    $value = 0
-    for $i in 0..5
-      $digit = $hash | string.slice $i 1
-      $value = $value * 16 + $hex_digits[$digit]
-    end
-    ret $value % 100
   end
 
   # ===== pawn名を「Abiko、Linda」の形に整形 =====
@@ -327,9 +424,182 @@
     ret true
   end
 
+  # 敵の種別名を、会話へ必要な大分類に分ける。
+  # シャンブラーを含む異常存在を最優先し、次にメカノイド・生物・人間の順で判定する。
+  func get_hostile_composition_category
+    $map_pawn = $0
+    if $map_pawn == null || $map_pawn.RaceProps == null
+      ret ""
+    end
+
+    $race = $map_pawn.RaceProps
+    if $map_pawn.IsShambler || $map_pawn.IsEntity || $map_pawn.IsMutant || $race.IsAnomalyEntity
+      ret "anomaly"
+    end
+    if $race.IsMechanoid
+      ret "mechanoid"
+    end
+    if $race.Animal
+      ret "creature"
+    end
+    if $race.Humanlike
+      ret "human"
+    end
+    ret ""
+  end
+
+  # KindLabelは動物・メカノイド・多くの異常存在のゲーム内種別名を返す。
+  # シャンブラーは元の人間や生物のKindLabelを残す場合があるため、専用プロパティを優先する。
+  func get_hostile_composition_label
+    $map_pawn = $0
+    if $map_pawn == null
+      ret ""
+    end
+    if $map_pawn.IsShambler
+      ret "シャンブラー"
+    end
+
+    $label = $map_pawn.KindLabel
+    if ($label == null || $label == "") && $map_pawn.kindDef != null
+      $label = $map_pawn.kindDef.LabelCap
+    end
+    if ($label == null || $label == "") && $map_pawn.def != null
+      $label = $map_pawn.def.LabelCap
+    end
+    if $label == null
+      ret ""
+    end
+    ret ("" + $label) | string.strip
+  end
+
+  # 敵の種別名へpawn_description_dictを適用する。
+  # 一致ルールの落選時は種別名だけを空にし、呼び出し元で大分類の警告は維持する。
+  func format_hostile_composition_label
+    $label = $0
+    $description_dict = $1
+    if $label == null || $description_dict == null
+      ret $label
+    end
+
+    $result = $label
+    for $key in ($description_dict | object.keys)
+      if $key != "" && ($result | string.contains $key)
+        $rule = $description_dict[$key]
+        if dictionary_rule_passes $rule null
+          $result = $result | string.replace $key (dictionary_value $rule)
+        else
+          ret ""
+        end
+      end
+    end
+    ret ($result | string.strip)
+  end
+
+  # 同じ大分類の種別名を最大4種類まで表示し、長いMOD構成でもプロンプトを肥大化させない。
+  func format_hostile_composition_group
+    $group_name = $0
+    $labels = $1
+    $has_category = $2
+    if !$has_category
+      ret ""
+    end
+    if $labels == null || $labels.size == 0
+      ret $group_name
+    end
+
+    $shown_labels = ""
+    $shown_count = 0
+    for $label in $labels
+      if $shown_count >= 4
+        break
+      end
+      if $shown_labels != ""
+        $shown_labels = $shown_labels + "、"
+      end
+      $shown_labels = $shown_labels + $label
+      $shown_count = $shown_count + 1
+    end
+    if $labels.size > 4
+      $shown_labels = $shown_labels + "、ほか"
+    end
+    ret $group_name + "「" + $shown_labels + "」"
+  end
+
+  # 活動中かつ既存の視認フィルターを通った敵だけから、種別構成を短くまとめる。
+  # 人間だけの襲撃は空文字を返し、非人間との混成時だけ「人間も混在」と補足する。
+  func build_hostile_composition
+    $current_map = $0
+    if $current_map == null || $current_map.mapPawns == null
+      ret ""
+    end
+
+    $anomaly_labels = []
+    $mechanoid_labels = []
+    $creature_labels = []
+    $has_anomaly = false
+    $has_mechanoid = false
+    $has_creature = false
+    $has_human = false
+
+    for $map_pawn in $current_map.mapPawns.AllPawnsSpawned
+      if !(is_active_map_hostile $map_pawn $current_map)
+        continue
+      end
+
+      $category = get_hostile_composition_category $map_pawn
+      if $category == "human"
+        $has_human = true
+        continue
+      end
+      if $category == ""
+        continue
+      end
+
+      $label = get_hostile_composition_label $map_pawn
+      $label = format_hostile_composition_label $label pawn_description_dict
+      if $category == "anomaly"
+        $has_anomaly = true
+        if $label != "" && !($anomaly_labels | array.contains $label)
+          $anomaly_labels[$anomaly_labels.size] = $label
+        end
+      else if $category == "mechanoid"
+        $has_mechanoid = true
+        if $label != "" && !($mechanoid_labels | array.contains $label)
+          $mechanoid_labels[$mechanoid_labels.size] = $label
+        end
+      else if $category == "creature"
+        $has_creature = true
+        if $label != "" && !($creature_labels | array.contains $label)
+          $creature_labels[$creature_labels.size] = $label
+        end
+      end
+    end
+
+    $groups = []
+    $anomaly_group = format_hostile_composition_group "異常存在" $anomaly_labels $has_anomaly
+    $mechanoid_group = format_hostile_composition_group "メカノイド" $mechanoid_labels $has_mechanoid
+    $creature_group = format_hostile_composition_group "敵性生物" $creature_labels $has_creature
+    for $group in [$anomaly_group, $mechanoid_group, $creature_group]
+      if $group != ""
+        $groups[$groups.size] = $group
+      end
+    end
+
+    if $groups.size == 0
+      ret ""
+    end
+    $result = $groups | array.join "、"
+    if $has_human
+      $result = $result + "（人間も混在）"
+    end
+    ret $result
+  end
+
   # ===== 敵性生物の種類と匹数から、会話用の脅威段階を判定する =====
-  # プレイヤー入植者だけの会話を対象とし、集計対象にAnimal以外の種族が混在する場合は通常戦闘へ戻す。
-  # RaceProps.AnimalにはMOD独自種族も含まれ得るため、プロンプトでは「動物」と呼ばない。
+  # プレイヤー入植者だけの会話を対象とし、通常生物以外の敵が混在する場合は通常戦闘へ戻す。
+  # RaceProps.InsectをAnimal内の独立種別として優先し、それ以外を既存の捕食型・非捕食型へ分ける。
+  # Animal系のRacePropsを持つ異常存在もあるため、get_hostile_composition_categoryで異常存在を先に除外する。
+  # AnimalにはMOD独自種族も含まれ得るため、プロンプトでは種別全体を「動物」と呼ばない。
   func classify_creature_threat
     $pawn_list = $0
     $current_map = $1
@@ -346,14 +616,17 @@
 
     $hostile_count = 0
     $predator_count = 0
+    $insect_count = 0
     for $map_pawn in $current_map.mapPawns.AllPawnsSpawned
       if is_active_map_hostile $map_pawn $current_map
-        if $map_pawn.RaceProps == null || !$map_pawn.RaceProps.Animal
+        if (get_hostile_composition_category $map_pawn) != "creature"
           ret ""
         end
 
         $hostile_count = $hostile_count + 1
-        if $map_pawn.RaceProps.predator
+        if $map_pawn.RaceProps.Insect
+          $insect_count = $insect_count + 1
+        else if $map_pawn.RaceProps.predator
           $predator_count = $predator_count + 1
         end
       end
@@ -363,15 +636,22 @@
       ret ""
     end
 
-    # 規模のしきい値は捕食型・非捕食型で共通。捕食型の有無は表現だけに使う。
+    # 虫はpredatorでも虫として扱う。虫と他種が混在する場合も、虫の存在がLLMへ伝わる分類を使う。
     $class_prefix = "creature_"
-    if $predator_count == $hostile_count
+    if $insect_count == $hostile_count
+      $class_prefix = "insect_"
+    else if $insect_count > 0
+      $class_prefix = "mixed_insect_"
+    else if $predator_count == $hostile_count
       $class_prefix = "predator_"
     else if $predator_count > 0
       $class_prefix = "mixed_creature_"
     end
 
-    # RimWorldでは大きな群れも珍しくないため、1～9体は少数、10～29体は群れ、30体以上は大群とする。
+    # 1体だけなら単独だと明示する。2～9体は少数、10～29体は群れ、30体以上は大群とする。
+    if $hostile_count == 1
+      ret $class_prefix + "single"
+    end
     if $hostile_count >= 30
       ret $class_prefix + "large"
     end
@@ -384,6 +664,9 @@
   # 脅威段階を、Systemプロンプトで使う中立的な表現へ変換する。
   func creature_threat_phrase
     $threat_class = $0
+    if $threat_class == "creature_single"
+      ret "1体のみの敵性生物による脅威"
+    end
     if $threat_class == "creature_small"
       ret "少数の敵性生物による脅威"
     end
@@ -392,6 +675,30 @@
     end
     if $threat_class == "creature_large"
       ret "敵性生物の大群による脅威"
+    end
+    if $threat_class == "insect_single"
+      ret "1体のみの敵対的な虫による脅威"
+    end
+    if $threat_class == "insect_small"
+      ret "少数の敵対的な虫による脅威"
+    end
+    if $threat_class == "insect_medium"
+      ret "敵対的な虫の群れによる脅威"
+    end
+    if $threat_class == "insect_large"
+      ret "敵対的な虫の大群による脅威"
+    end
+    if $threat_class == "mixed_insect_small"
+      ret "虫を含む少数の敵性生物による脅威"
+    end
+    if $threat_class == "mixed_insect_medium"
+      ret "虫を含む敵性生物の群れによる脅威"
+    end
+    if $threat_class == "mixed_insect_large"
+      ret "虫を含む敵性生物の大群による脅威"
+    end
+    if $threat_class == "predator_single"
+      ret "1体のみの捕食生物による脅威"
     end
     if $threat_class == "predator_small"
       ret "少数の捕食生物による脅威"
@@ -417,6 +724,9 @@
   # 規模に応じて緊迫感を調整し、小規模な相手を絶体絶命として描写することを防ぐ。
   func creature_threat_tone
     $threat_class = $0
+    if $threat_class == "creature_single"
+      ret "相手は1体のみです。警戒や対処中の慌ただしさは反映しつつ、群れや複数の敵がいるようには描写しないでください。"
+    end
     if $threat_class == "creature_small"
       ret "警戒や対処中の慌ただしさは反映しつつ、絶体絶命・決死・鬼気迫る状況として過剰に描写しないでください。"
     end
@@ -425,6 +735,21 @@
     end
     if $threat_class == "creature_large" || $threat_class == "mixed_creature_large"
       ret "数に圧迫される強い緊張感と、包囲を避けながら対処する切迫感を反映してください。"
+    end
+    if $threat_class == "insect_single"
+      ret "敵対的な虫は1体のみです。接近や噛みつきへの警戒は反映しつつ、群れとして描写しないでください。"
+    end
+    if $threat_class == "insect_small" || $threat_class == "mixed_insect_small"
+      ret "虫の接近や噛みつきへの警戒を反映しつつ、少数の相手に過剰な絶望感を持たせないでください。"
+    end
+    if $threat_class == "insect_medium" || $threat_class == "mixed_insect_medium"
+      ret "虫を含む群れに押し囲まれる危険と、対処中の強い緊張感を反映してください。"
+    end
+    if $threat_class == "insect_large" || $threat_class == "mixed_insect_large"
+      ret "虫を含む大群に圧迫される危険と、包囲を避けながら直ちに対処する強い切迫感を反映してください。"
+    end
+    if $threat_class == "predator_single"
+      ret "捕食生物は1体のみです。襲撃や接近への警戒は反映しつつ、群れとして描写しないでください。"
     end
     if $threat_class == "predator_small" || $threat_class == "mixed_creature_small"
       ret "襲撃や接近への警戒を反映しつつ、少数の相手に過剰な絶望感を持たせないでください。"
@@ -445,6 +770,7 @@
     $current_map = $0
     $biome_chance = $1
     $creature_threat_class = $2
+    $hostile_composition = $3
     if $current_map == null || $current_map.mapPawns == null
       ret ""
     end
@@ -456,15 +782,27 @@
 
     $trader_kinds = ""
     $trader_kind_keys = "|"
+    $trader_label_cache = {}
     $hostile_faction_counts = {}
 
     for $map_pawn in $current_map.mapPawns.AllPawnsSpawned
       if $map_pawn.TraderKind != null && $map_pawn.mindState != null && !$map_pawn.mindState.traderDismissed
-        $trader_kind = $map_pawn.TraderKind.LabelCap | string.strip
-        for $key in (trader_kind_replace_dict | object.keys)
-          if $key != ""
-            $trader_kind = $trader_kind | string.replace $key trader_kind_replace_dict[$key]
+        $original_trader_kind = $map_pawn.TraderKind.LabelCap | string.strip
+        $trader_kind = $trader_label_cache[$original_trader_kind]
+        if $trader_kind == null
+          $trader_kind = $original_trader_kind
+          for $key in (trader_kind_replace_dict | object.keys)
+            if $key != "" && ($trader_kind | string.contains $key)
+              $rule = trader_kind_replace_dict[$key]
+              if dictionary_rule_passes $rule null
+                $trader_kind = $trader_kind | string.replace $key (dictionary_value $rule)
+              else
+                $trader_kind = ""
+                break
+              end
+            end
           end
+          $trader_label_cache[$original_trader_kind] = $trader_kind
         end
         $trader_kind_key = "|" + $trader_kind + "|"
         if $trader_kind != "" && !($trader_kind_keys | string.contains $trader_kind_key)
@@ -479,7 +817,7 @@
       if is_active_map_hostile $map_pawn $current_map
         # Pawn.FactionはRimTalkのmagic fieldで派閥名文字列として取得できる
         $faction_name = format_faction_name $map_pawn.faction faction_display_dict
-        # 空文字のグループは派閥名を取得できない敵。架空の派閥名を付けず別表現にする。
+        # 空文字は名前が取得不能または表示抽選で落選した敵。名前なしの脅威としてまとめる。
 
         $current_count = $hostile_faction_counts[$faction_name]
         if $current_count == null
@@ -492,7 +830,7 @@
     end
 
     # 正確な個体数はLLMへ渡さず、脅威の規模だけを段階的に伝える。
-    # 1～9体は小規模、10～29体は多数、30体以上は大量として扱う。
+    # 1体だけなら明示し、2～9体は小規模、10～29体は多数、30体以上は大量として扱う。
     $hostile_summary = ""
     for $faction_name in ($hostile_faction_counts | object.keys)
       if $hostile_summary != ""
@@ -500,7 +838,9 @@
       end
 
       $hostile_count = $hostile_faction_counts[$faction_name]
-      if $hostile_count >= 30
+      if $hostile_count == 1
+        $hostile_scale = "1体のみの敵"
+      else if $hostile_count >= 30
         $hostile_scale = "大量の敵"
       else if $hostile_count >= 10
         $hostile_scale = "多数の敵"
@@ -509,7 +849,7 @@
       end
 
       if $faction_name == ""
-        $hostile_summary = $hostile_summary + "所属派閥が確認できない" + $hostile_scale
+        $hostile_summary = $hostile_summary + $hostile_scale
       else
         $hostile_summary = $hostile_summary + "敵対派閥「" + $faction_name + "」：" + $hostile_scale
       end
@@ -521,6 +861,9 @@
         $result = "【周辺の脅威】\n現在のマップ上では、" + $threat_phrase + "が活動中です。"
       else
         $result = "【重要：敵対勢力が活動中】\n現在のマップ上では、" + $hostile_summary + "が活動中です。平穏な日常会話にせず、存在する脅威への警戒と緊張感を最優先で反映してください。"
+      end
+      if $hostile_composition != null && $hostile_composition != ""
+        $result = $result + "\n- 敵の構成：" + $hostile_composition
       end
       if $biome_name != ""
         $result = $result + "\n- バイオーム：" + $biome_name
@@ -586,6 +929,7 @@
     $active_social_fight_pair = $2
     $recent_social_fight_pair = $3
     $creature_threat_class = $4
+    $hostile_composition = $5
     $count = $pawn_list.size
     $formatted_names = format_pawn_names $pawn_list
 
@@ -611,6 +955,9 @@
     if $in_active_combat
       if $creature_threat_class != ""
         $threat_phrase = creature_threat_phrase $creature_threat_class
+        if $hostile_composition != null && $hostile_composition != ""
+          $threat_phrase = $threat_phrase + "（構成：" + $hostile_composition + "）"
+        end
         $tone_instruction = creature_threat_tone $creature_threat_class
         if $count == 1
           ret "あなたはロールプレイAIです。" + $pawn_list[0].name + "は現在、" + $threat_phrase + "と戦闘中です。【性格】を重視しつつ、対処の最中に自然に漏れる独り言を生成してください。他者への返答ではなく、実際の状況に見合う口調にしてください。" + $tone_instruction
@@ -623,8 +970,13 @@
         ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、" + $threat_phrase + "と戦闘中です。【性格】と各人物の立場を重視しつつ、対処の最中に交わす自然な複数人会話を生成してください。全員が同じ脅威と状況を共有する会話にしてください。" + $tone_instruction
       end
 
+      $combat_target = "敵対勢力"
+      if $hostile_composition != null && $hostile_composition != ""
+        $combat_target = $combat_target + "（構成：" + $hostile_composition + "）"
+      end
+
       if $count == 1
-        ret "あなたはロールプレイAIです。" + $pawn_list[0].name + "は現在、敵対勢力との戦闘中です。【性格】を重視しつつ、戦闘の最中に自然に漏れる切迫した独り言を生成してください。他者への返答や、平穏な日常会話にはしないでください。"
+        ret "あなたはロールプレイAIです。" + $pawn_list[0].name + "は現在、" + $combat_target + "との戦闘中です。【性格】を重視しつつ、戦闘の最中に自然に漏れる切迫した独り言を生成してください。他者への返答や、平穏な日常会話にはしないでください。"
       end
 
       if (classify_pawns $pawn_list) == "mixed"
@@ -632,10 +984,10 @@
       end
 
       if $count == 2
-        ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、敵対勢力との戦闘中です。【性格】と二人の関係性を重視しつつ、戦闘の最中に交わす切迫した自然な会話を生成してください。互いの発言を繋げ、平穏な日常会話にはしないでください。"
+        ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、" + $combat_target + "との戦闘中です。【性格】と二人の関係性を重視しつつ、戦闘の最中に交わす切迫した自然な会話を生成してください。互いの発言を繋げ、平穏な日常会話にはしないでください。"
       end
 
-      ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、敵対勢力との戦闘中です。【性格】と各人物の立場を重視しつつ、戦闘の最中に交わす緊迫した複数人会話を生成してください。全員が同じ脅威と戦況を共有する会話にしてください。"
+      ret "あなたはロールプレイAIです。" + $formatted_names + "は現在、" + $combat_target + "との戦闘中です。【性格】と各人物の立場を重視しつつ、戦闘の最中に交わす緊迫した複数人会話を生成してください。全員が同じ脅威と戦況を共有する会話にしてください。"
     end
 
     # 喧嘩後に新たな敵対戦闘が始まっている場合は、現在の戦闘を優先する。
@@ -678,9 +1030,22 @@
       $recent_social_fight_pair = find_recent_social_fight_pair $pawn_list social_fight_aftermath_ticks
     end
 
+    # 敵の構成は、周辺状況を利用してよいプレイヤー入植者だけの会話に限定する。
+    $all_player_colonists = $pawn_list.size > 0
+    for $participant in $pawn_list
+      if !$participant.IsFreeColonist
+        $all_player_colonists = false
+        break
+      end
+    end
+
     $in_active_combat = participants_in_active_combat $pawn_list $current_map
     $creature_threat_class = classify_creature_threat $pawn_list $current_map
-    $base_instruction = build_base_instruction $pawn_list $in_active_combat $active_social_fight_pair $recent_social_fight_pair $creature_threat_class
+    $hostile_composition = ""
+    if $all_player_colonists
+      $hostile_composition = build_hostile_composition $current_map
+    end
+    $base_instruction = build_base_instruction $pawn_list $in_active_combat $active_social_fight_pair $recent_social_fight_pair $creature_threat_class $hostile_composition
 
     # ポーンごとの立場
     $pawn_role_extra = build_pawn_role_instructions $pawn_list $player_faction_name
@@ -690,15 +1055,13 @@
 
     # 会話参加者が全員プレイヤー入植者の場合だけ、マップ内の周辺状況を補う
     $map_awareness = ""
-    $all_player_colonists = $pawn_list.size > 0
-    for $participant in $pawn_list
-      if !$participant.IsFreeColonist
-        $all_player_colonists = false
-        break
-      end
-    end
     if $all_player_colonists && $current_map != null
-      $map_awareness = build_map_awareness $current_map biome_display_chance $creature_threat_class
+      # 戦闘中は冒頭指示へ構成を含めるため、周辺状況では重複させない。
+      $map_composition = $hostile_composition
+      if $in_active_combat
+        $map_composition = ""
+      end
+      $map_awareness = build_map_awareness $current_map biome_display_chance $creature_threat_class $map_composition
     end
 
     $result = $base_instruction
@@ -970,11 +1333,11 @@
     end
   end
 
-  # setvar/getvarを使わず、System/Userで同じ入力から同じUN抽選値を得る。
+  # System/Userで同じ入力から同じUN抽選値を得る。
   # 戦闘・徴兵中や0%・100%では抽選自体が不要なため、番兵値100を使用する。
   UN_roll = 100
   if !UN_blocked_by_combat && !UN_has_drafted_pawn && UN_chance > 0 && UN_chance < 100
-    UN_roll = UN_synchronized_percent Find.TickManager.TicksGame ctx.history
+    UN_roll = synchronized_percent current_tick prompt_history
   end
 
   if !UN_blocked_by_combat && !UN_has_drafted_pawn && (UN_chance >= 100 || (UN_chance > 0 && UN_roll < UN_chance))
@@ -993,7 +1356,7 @@
     system_prompt = build_system_prompt prompt_pawns player_faction_name map
     output_rules = "発言はキャラ毎に1回まで\ntextは200文字程度"
     # 過去の会話履歴は通常モードだけで使用し、UN特殊シーンには混在させない
-    ai_history = extract_ai_history ctx.history
+    ai_history = extract_ai_history prompt_history
   end
 
   if ai_history != ""
