@@ -11,119 +11,245 @@
   # UN発火時のSystem指示文。{name}は対象pawnの名前へ自動的に置換される
   UN_instruction = "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
 
+  # ===== 辞書の共通書式 =====
+  # "検索キー": { value: "置換・表示する文字列", chance: 100 }
+  # 左側の文字列がkey（検索語）、valueが置換・表示する文字列、chanceが表示・採用確率。
+  # chanceは0～100。0では必ず落選、100では必ず当選する。
+  # 当選時は指定の置換を必ず行い、落選時は対象の表示・採用を見送る。対象範囲とvalue=""の意味は各辞書を参照。
+  # 旧書式（文字列だけ／確率だけ）も読み込めるが、新しく追加する項目は上の書式に統一する。
+
   # ===== UNで検出するシーンの辞書 =====
   # fullinteractionを行順に部分一致検索し、一致がなければ未置換のp.jobも検索する。
-  # valueが空文字なら一致した行をシーン説明に使用する（通常p.jobは1行）。
-  # valueに文章を入れると、取得した原文全体の代わりにその文章をシーン説明として使用する。
-  # 複数のkeyが同じ行に一致した場合は上に登録したkeyを優先する。辞書を空にするとUNは発火しない。
+  # valueが空なら一致した原文行を使用し、文章を入れると原文行全体をその文章へ置き換える。
+  # chanceはそのkeyを採用する確率。UN_chanceの抽選も通る必要がある（50と50なら概ね25%）。
+  # 同じkeyの落選は他の行・p.job・別pawnでも再抽選しない。採用可能なkeyのうち行順・登録順を優先する。
+  # 辞書を空にするとUNは発火しない。System/Userでは辞書の内容も同じにする。
   UN_keyword = {
-    "サッカーボール": "",
-    "バスケットボール": "",
+    "サッカーボール": { value: "", chance: 100 },
+    "バスケットボール": { value: "", chance: 100 },
   }
 
   # ===== プロンプトに表示する派閥名の変更（System側と同じ値にする） =====
-  # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前
+  # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前。
+  # chanceは派閥名の表示確率。落選時は名前を省き、当選時はvalueの名前を使う（空なら元の名前）。
+  # System/Userで同じ抽選結果を使う。名前の表示有無は所属・敵味方の判定に影響しない。
   faction_display_dict = {
-    "闇の存在": "異形",
+    "闇の存在": { value: "異形", chance: 100 },
+    "古代人": { value: "古代の機械文明", chance: 100 },
   }
 
-  # ===== 除外/置換キーワード（key: 検索文字列, value: 置換後） 前半部分は消さないでください =====
+  # ===== 除外/置換キーワード（前半部分は消さないでください） =====
   # 影響箇所：冒頭の性別表示、【健康情報】、【装備】の武器名、【欲求】。
-  # 性別表示・【装備】・【欲求】では、一致部分をvalueへ置換する。valueが空なら一致部分だけを除去する。
-  # 【健康情報】では、valueが空ならkeyを含むHediff項目全体を除外し、空でなければ一致部分だけを置換する。
+  # chanceは一致した項目の表示確率。当選時は必ず置換し、落選時はその項目全体を非表示にする。
+  # 非表示の単位は性別・武器名・欲求1件・Hediff1件。未登録の項目はそのまま残す。
+  # 性別表示・【装備】・【欲求】では一致部分をvalueへ置換し、valueが空なら一致部分だけを除去する。
+  # 【健康情報】ではvalueが空ならchanceにかかわらずHediff項目全体を除外する。出血要約は辞書の対象外。
+  # 一致するルールを登録順に適用する。複数に一致した項目は全ての抽選を通った場合だけ表示する。
   # 置換後の各欄は、ペルソナの{"キーワード"}条件を判定する文脈にも使われる。
   replace_dict = {
-    "Male": "男性",
-    "Female": "女性",
-    "Traits: ": "",
-    "Relations: ": "",
-    "Equipment: ": "",
-    "Memory: ": "",
-    "[Weapon]": "武器：",
-    "[Apparel]": "衣服：",
+    "Male": { value: "男性", chance: 100 },
+    "Female": { value: "女性", chance: 100 },
+    "Traits: ": { value: "", chance: 100 },
+    "Relations: ": { value: "", chance: 100 },
+    "Equipment: ": { value: "", chance: 100 },
+    "Memory: ": { value: "", chance: 100 },
+    "[Weapon]": { value: "武器：", chance: 100 },
+    "[Apparel]": { value: "衣服：", chance: 100 },
     # ここから下は自由
-    "不死": "",
-    "不老": "",
-    "メカリンク": "",
-    "豪華な宿舎": "",
-    "侵蝕された眼": "",
-    "制御不能な触手": "",
-    "再生 (": "",
-    "復活": "",
+    "不死": { value: "", chance: 100 },
+    "不老": { value: "", chance: 100 },
+    "メカリンク": { value: "", chance: 100 },
+    "豪華な宿舎": { value: "", chance: 100 },
+    "侵蝕された眼": { value: "", chance: 100 },
+    "制御不能な触手": { value: "", chance: 100 },
+    "再生 (": { value: "", chance: 100 },
+    "復活": { value: "", chance: 100 },
+    "取り外された": { value: "", chance: 100 }, # 義肢移植などで並ぶ「取り外された」の部位項目を非表示にする。
+    "耐性": { value: "", chance: 100 }, # たばこ耐性等を非表示にしノイズを減らす
+    "健康の教え": { value: "", chance: 100 },
+    "グルメ料理": { value: "", chance: 100 },
+    "ホットソースを食事で摂取": { value: "トウガラシが効いた美味しい料理を食べた", chance: 30 },
   }
 
-  # ===== 作業内容専用の除去/置換（key: 検索文字列, value: 置換後） =====
-  # 一致部分だけを順に置換する。空のvalueはその部分を除去、空のkeyは無視する。
+  # ===== 作業内容専用の除去/置換 =====
+  # keyに部分一致した箇所をvalueへ順に置換する。valueが空なら一致部分だけを除去する。
+  # chanceは作業内容の表示確率。落選時は作業本文と作業対象の補足を非表示にする。空のkeyは無視する。
+  # 表示の変更で、元のp.jobを使う戦闘・狩猟・UNの判定は変わらない。
   job_replace_dict = {
-    "traveling to: ": "",
-    "Traveling to: ": "",
-    "traveling to": "",
-    "Traveling to": "",
+    "traveling to: ": { value: "", chance: 100 },
+    "Traveling to: ": { value: "", chance: 100 },
+    "traveling to": { value: "", chance: 100 },
+    "Traveling to": { value: "", chance: 100 },
     # ここから下は自由
-    "木材を精製中": "木材をバイオ液化燃料に精製中",
+    "木材を精製中": { value: "木材をバイオ液化燃料に精製中", chance: 100 },
+    "有機物を精製中": { value: "有機物をバイオ液化燃料に精製中", chance: 100 },
+    "グルメスープ": { value: "肉野菜ベースの美味しいスープ", chance: 100 },
+    "PON": { value: "", chance: 100 },
   }
 
-  # ===== 作業対象・攻撃元の補助情報（key: 検索文字列, value: 表示文） =====
-  # 作業内容では一致箇所をvalueへ置換する。健康情報では、表示対象Hediffの置換前ラベルに
-  # keyがあればvalueをkeyごとに一度だけ補足する。除外したHediffからは補足しない。
+  # ===== 作業対象・攻撃元の補助情報 =====
+  # 作業内容ではkeyへの一致部分をvalueへ置換する。valueが空なら一致部分を除去する。
+  # 健康情報では、表示対象Hediffの置換前ラベルにkeyがあればvalueをkeyごとに一度だけ補足する。
+  # 健康情報のvalueが空の場合や、除外済みHediffには補足しない。
+  # chanceはそれぞれの表示確率。作業側で落選したら作業本文と対象の補足を非表示にする。
+  # 健康側の落選は攻撃元の補足だけを非表示にし、怪我そのものは残す（怪我の表示はreplace_dictで設定）。
   pawn_description_dict = {
-    "パイクマン": "パイクマン：ニードルガンを装備した長距離戦闘用メカノイド",
-    "セントリードローン": "セントリードローン：スキャッターガンを装備した旧式の敵性メカ",
+    "パイクマン": { value: "パイクマン：ニードルガンを装備した長距離戦闘用メカノイド", chance: 100 },
+    "セントリードローン": { value: "セントリードローン：スキャッターガンを装備した旧式の敵性メカ", chance: 100 },
+    "ハイブクイーン": { value: "ハイブクイーン：巨大な体格を持つ虫の女王", chance: 100 },
   }
 
-  # ===== 表示する特性（key: 検索文字列, value: 表示名） =====
-  # keyへの部分一致で最初に一致したvalueを表示する。未登録・空のvalueは非表示、空のkeyは無視する。
+  # ===== 表示する特性 =====
+  # keyへの部分一致で最初に一致したルールを使い、chanceの確率でvalueを表示する。
+  # 未登録・落選・valueが空なら特性を非表示にする。空のkeyは無視する。
   trait_display_dict = {
-    "勤労者": "働き者",
+    "勤労者": { value: "働き者", chance: 100 },
   }
 
   # ===== 欲求の表示確率 =====
-  # key: 部分一致する文字列
-  # value: 表示確率（0～100）
-  # 最初に一致したkeyの確率を使う。未登録の項目は表示せず、空のkeyは無視する。
+  # keyは部分一致。最初に一致したルールのchanceで表示し、未登録・落選は非表示にする。
+  # valueが空なら元の欲求を表示し、空でなければkeyに一致した部分をvalueへ置換する。
   thought_display_dict = {
-    "入植者が死んだ": 1,
+    "ライバル": { value: "", chance: 0 }, #ライバル関係はノイズなので飛ばす
+    "親友": { value: "", chance: 0 }, #親友関係は血縁と重複しがちなので飛ばす
+    "死んだ": { value: "", chance: 10 }, #◯◯が死んだ系を10%で拾う
   }
 
   # ===== 日常的な天候の表示確率 =====
-  # 完全一致した天候だけを確率表示する。未登録の特殊・危険な天候は常時表示する
+  # keyに完全一致した天候をchanceの確率で表示する。落選は非表示、未登録は常時表示。
+  # valueが空なら元の天候名を使い、空でなければその表示名へ置換する。
+  # 軌道上の温度除外は置換・非表示にする前の天候で判定する。
   weather_display_chance_dict = {
-    "快晴": 10,
-    "霧": 10,
-    "雨": 10,
-    "霧雨": 10,
-    "小雪": 10,
+    "快晴": { value: "", chance: 10 },
+    "霧": { value: "", chance: 10 },
+    "雨": { value: "", chance: 10 },
+    "霧雨": { value: "", chance: 10 },
+    "小雪": { value: "", chance: 10 },
   }
 
   # ===== マップイベントの表示確率 =====
-  # keyはGameCondition本体の名前、valueは表示確率（0～100）。未登録のイベントは常時表示する
-  # 性別や強度が付くイベントも、本体名（例: "サイコドローン"）だけ登録すればよい
+  # keyは完全な表示名、またはGameCondition本体の名前。完全な表示名への一致を優先する。
+  # chanceは表示確率。落選は非表示、未登録は常時表示。valueが空なら元の表示名を使う。
+  # valueが空でなければ一致箇所を置換し、本体名で一致した場合は性別・強度の接尾情報を残す。
+  # 対象性別は置換前の表示名で判定するため、valueで名前を変えても対象者は変わらない。
   map_event_display_chance_dict = {
-    "オーロラ": 10,
-    "サイコスード": 10,
-    "サイコドローン": 10,
+    "オーロラ": { value: "", chance: 100 },
+    "サイコスード": { value: "", chance: 50 },
+    "サイコドローン": { value: "", chance: 50 },
+    "火山の冬": { value: "遠くで発生した火山灰によって太陽光が遮られ、気温が下がっています", chance: 30 },
+    "えら腐敗菌": { value: "えら腐敗菌という寄生菌によってこの地域の魚の数が減少しています", chance: 10 },
   }
 
-  # 派閥名を前後の空白を除いて完全一致置換する。未登録・空の表示名なら元の名前を使う。
+  # 1回のテンプレート生成で共通の入力を使い、途中でTickや履歴を読み直さない。
+  current_tick = Find.TickManager.TicksGame
+  prompt_history = ctx.history
+
+  # ===== UN・派閥名のSystem/User同期抽選 =====
+  # 同じTick・履歴長・用途キーなら同じ0～99になり、外部の保存状態には依存しない。
+  # 第3引数を省略したUN全体の抽選は、以前と同じ入力・計算結果を維持する。
+  func synchronized_percent
+    $current_tick = $0
+    $history_text = $1
+    $scope = $2
+    $history_size = 0
+    if $history_text != null
+      $history_size = $history_text | string.size
+    end
+
+    # 大きな整数の乗算や下位桁への依存を避け、Scriban標準のSHA-256で入力を混ぜる。
+    # 先頭6桁だけ数値化するため、途中計算も最大16,777,215で桁あふれしない。
+    $seed_text = "" + $current_tick + ":" + $history_size
+    if $scope != null && $scope != ""
+      $seed_text = $seed_text + ":" + $scope
+    end
+    $hash = $seed_text | string.sha256
+    $hex_digits = {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "a": 10, "b": 11, "c": 12, "d": 13, "e": 14, "f": 15}
+    $value = 0
+    for $i in 0..5
+      $digit = $hash | string.slice $i 1
+      $value = $value * 16 + $hex_digits[$digit]
+    end
+    ret $value % 100
+  end
+
+  # valueを取得する。旧名keywordも互換用に受け付け、両方あれば空文字を含めvalueを優先する。
+  # 旧書式の文字列はそのまま、確率だけなら空文字として扱う。
+  func dictionary_value
+    $rule = $0
+    if ($rule | object.typeof) == "string"
+      ret $rule
+    end
+    if ($rule | object.typeof) == "object"
+      if $rule.value != null
+        ret "" + $rule.value
+      end
+      if $rule.keyword != null
+        ret "" + $rule.keyword
+      end
+    end
+    ret ""
+  end
+
+  # 新書式のchance、または旧書式の数値を取得する。省略時は100、不正な数値やnull項目は0。
+  func dictionary_chance
+    $rule = $0
+    if $rule == null
+      ret 0
+    end
+    $raw_chance = 100
+    if ($rule | object.typeof) == "number"
+      $raw_chance = $rule
+    else if ($rule | object.typeof) == "object" && $rule.chance != null
+      $raw_chance = $rule.chance
+    end
+    $chance = ("" + $raw_chance) | string.to_float
+    if $chance == null
+      ret 0
+    end
+    ret $chance
+  end
+
+  # 通常はRimTalkのrandomで抽選。同期キーを渡すUN・派閥名だけは両テンプレートで同じ結果にする。
+  # 0/100では乱数を消費しない。同期キーは用途と検索キーから作り、UN全体の抽選とも分離する。
+  func dictionary_rule_passes
+    $rule = $0
+    $sync_key = $1
+    $chance = dictionary_chance $rule
+    if $chance <= 0
+      ret false
+    end
+    if $chance >= 100
+      ret true
+    end
+    if $sync_key != null && $sync_key != ""
+      $roll = synchronized_percent current_tick prompt_history $sync_key
+    else
+      $roll = random 0 100
+    end
+    ret $roll < $chance
+  end
+
+  # 派閥名の表示を完全一致辞書で決める。落選時は空文字、当選時は置換後の名前を返す。
+  # 未登録または当選してvalueが空なら元の名前。空文字を「所属なし」の判定には使わない。
   func format_faction_name
     $faction_name = $0
     $dict = $1
-
     if $faction_name == null || $faction_name == ""
       ret ""
     end
-
     $original_name = $faction_name | string.strip
-    if $dict != null
-      $display_name = $dict[$original_name]
-      if $display_name != null
-        $display_name = $display_name | string.strip
+    if $dict != null && $original_name != ""
+      $rule = $dict[$original_name]
+      if $rule != null
+        if !(dictionary_rule_passes $rule ("faction:" + $original_name))
+          ret ""
+        end
+        $display_name = (dictionary_value $rule) | string.strip
         if $display_name != ""
           ret $display_name
         end
       end
     end
-
     ret $original_name
   end
 
@@ -137,13 +263,17 @@
     end
 
     # fullinteractionの行順を優先する。同じ行に複数keyがある場合は辞書の登録順で最初のものを使う
-    # valueが空なら原文行、空でなければvalueだけを返す（部分置換ではなく行全体の置換）
+    # valueが空なら原文行、空でなければvalueだけを返す（行全体の置換）。
     for $line in ($interaction_text | SplitByLine)
       $trimmed = $line | string.strip
       if $trimmed != ""
         for $key in ($keyword_dict | object.keys)
           if $key != "" && ($trimmed | string.contains $key)
-            $replacement = $keyword_dict[$key]
+            $rule = $keyword_dict[$key]
+            if !(dictionary_rule_passes $rule ("UN:" + $key))
+              continue
+            end
+            $replacement = dictionary_value $rule
             if $replacement == null || $replacement == ""
               ret $trimmed
             end
@@ -203,30 +333,6 @@
     end
 
     ret null
-  end
-
-  # ===== UN専用のSystem/User同期抽選 =====
-  # 共有変数には依存せず、両テンプレートで共通のゲームTickと履歴長から同じ0～99を作る。
-  # 履歴長が変わると停止中でも結果が変わり得る。同じTick・履歴長なら同じ結果で、独立した乱数ではない。
-  func UN_synchronized_percent
-    $current_tick = $0
-    $history_text = $1
-    $history_size = 0
-    if $history_text != null
-      $history_size = $history_text | string.size
-    end
-
-    # 大きな整数の乗算や下位桁への依存を避け、Scriban標準のSHA-256で入力を混ぜる。
-    # 先頭6桁だけ数値化するため、途中計算も最大16,777,215で桁あふれしない。
-    $seed_text = "" + $current_tick + ":" + $history_size
-    $hash = $seed_text | string.sha256
-    $hex_digits = {"0": 0, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "a": 10, "b": 11, "c": 12, "d": 13, "e": 14, "f": 15}
-    $value = 0
-    for $i in 0..5
-      $digit = $hash | string.slice $i 1
-      $value = $value * 16 + $hex_digits[$digit]
-    end
-    ret $value % 100
   end
 
   # ===== 会話参加者が現在交戦中か判定（System側と同じ条件） =====
@@ -347,6 +453,8 @@
     $target_pawn = $0
     $faction_dict = $1
     $faction_name = format_faction_name $target_pawn.faction $faction_dict
+    # p.factionは表示用文字列。所属オブジェクトはHomeFactionから取得する。
+    $faction = $target_pawn.HomeFaction
 
     # 派閥を持たない人狩り状態も、現在はプレイヤー陣営への脅威として扱う。
     $is_manhunter = false
@@ -359,19 +467,135 @@
       $standing = "囚人"
     else if $target_pawn.IsSlave
       $standing = "奴隷"
-    else if $target_pawn.IsColonist || ($target_pawn.HomeFaction != null && $target_pawn.HomeFaction.IsPlayer)
+    else if $target_pawn.IsColonist || ($faction != null && $faction.IsPlayer)
       $standing = "プレイヤー陣営の仲間"
-    else if (IsEnemy $target_pawn) || $is_manhunter
-      $standing = "プレイヤー陣営に敵対"
-    else if $faction_name != ""
-      $standing = "プレイヤー陣営には非敵対"
     else
-      $standing = "所属派閥なし"
+      $is_enemy = (IsEnemy $target_pawn) || $is_manhunter
+      # IsEnemyは非表示派閥を除外するため、Odysseyの宙族（Salvagers）などは
+      # 派閥の対プレイヤー関係を補助判定に使う。hiddenだけでは敵と決めない。
+      # 囚人・奴隷・仲間は上で確定し、自派閥同士の関係取得も避ける。
+      if !$is_enemy && $faction != null && $faction.def != null && $faction.def.hidden
+        if Find.FactionManager != null && Find.FactionManager.OfPlayer != null
+          $is_enemy = ("" + $faction.PlayerRelationKind) == "Hostile"
+        end
+      end
+      # 本当に派閥がないpawnも、種別に全勢力への敵対設定があれば拾う。
+      if !$is_enemy && $faction == null && $target_pawn.kindDef != null
+        $is_enemy = $target_pawn.kindDef.hostileToAll == true
+      end
+
+      if $is_enemy
+        $standing = "プレイヤー陣営に敵対"
+      else if $faction != null || ($target_pawn.faction != null && $target_pawn.faction != "")
+        $standing = "プレイヤー陣営には非敵対"
+      else
+        $standing = "所属派閥なし"
+      end
     end
     if $faction_name != ""
       $standing = $standing + "／所属派閥「" + $faction_name + "」"
     end
     ret $standing
+  end
+
+  # 動物へ自動付与された末尾番号（例：「ヤク 9」）だけを表示名から除く。
+  # 種族名または性別固有ラベルと「番号を除いた名前」が完全一致する場合に限定し、人名・物品名・数量には触れない。
+  func format_job_target_pawn_name
+    $target_pawn = $0
+    if $target_pawn == null
+      ret ""
+    end
+    if $target_pawn.RaceProps == null || !$target_pawn.RaceProps.Animal
+      ret $target_pawn.name
+    end
+
+    $target_name = "" + $target_pawn.name
+    if $target_name == "" || $target_pawn.def == null
+      ret $target_name
+    end
+
+    $name_without_number = $target_name | regex.replace "[ 　]+[0-9０-９]+$" ""
+    if $name_without_number == $target_name
+      ret $target_name
+    end
+
+    $race_label = $target_pawn.def.LabelCap
+    if $race_label != null && $race_label != "" && $name_without_number == ("" + $race_label)
+      ret $name_without_number
+    end
+    $race_label = $target_pawn.def.label
+    if $race_label != null && $race_label != "" && $name_without_number == ("" + $race_label)
+      ret $name_without_number
+    end
+
+    # PawnKindDef の性別固有ラベル（例：ニワトリの「オンドリ」「メンドリ」）も
+    # 自動命名に使われるため、種族ラベルと同じ照合対象にする。
+    if $target_pawn.kindDef != null
+      $normalized_name = $name_without_number | string.downcase
+      $gender_label = $target_pawn.kindDef.labelMale
+      if $gender_label != null && $gender_label != "" && $normalized_name == (("" + $gender_label) | string.downcase)
+        ret $name_without_number
+      end
+      $gender_label = $target_pawn.kindDef.labelFemale
+      if $gender_label != null && $gender_label != "" && $normalized_name == (("" + $gender_label) | string.downcase)
+        ret $name_without_number
+      end
+    end
+    ret $target_name
+  end
+
+  # p.job全体へ正規表現をかけず、現在のJobが参照している動物名だけを整える。
+  # 生体のほか、運搬・解体中の遺体、手荷物、作業台へ置いた材料も対象にする。
+  func format_job_animal_target_names
+    $text = $0
+    $pawn = $1
+    if $text == null || $text == "" || $pawn == null || $pawn.CurJob == null
+      ret $text
+    end
+
+    $job = $pawn.CurJob
+    $targets = [$pawn.TargetCurrentlyAimingAt.Thing, $job.targetA.Thing, $job.targetB.Thing, $job.targetC.Thing]
+    if $pawn.carryTracker != null
+      $targets[$targets.size] = $pawn.carryTracker.CarriedThing
+    end
+    if $job.placedThings != null
+      for $placed in $job.placedThings
+        if $placed != null && $placed.Count > 0
+          $targets[$targets.size] = $placed.thing
+        end
+      end
+    end
+
+    $result = $text
+    $seen_names = []
+    for $target in $targets
+      if $target == null || $target.Destroyed || $target.def == null
+        continue
+      end
+
+      if $target.def.IsCorpse
+        $target_pawn = $target.InnerPawn
+      else if $target.def.race != null
+        $target_pawn = $target
+      else
+        continue
+      end
+      if $target_pawn == null || $target_pawn.name == null || $target_pawn.name == ""
+        continue
+      end
+
+      $target_name = "" + $target_pawn.name
+      if $seen_names | array.contains $target_name
+        continue
+      end
+      $seen_names[$seen_names.size] = $target_name
+
+      $display_name = format_job_target_pawn_name $target_pawn
+      if $display_name != $target_name
+        $result = $result | string.replace $target_name $display_name
+      end
+    end
+    ret $result
   end
 
   # 現在照準中の対象・作業対象・手荷物・台に置いた材料から、生存pawnと遺体を拾う。
@@ -424,7 +648,7 @@
       # 照準・JobTarget・手荷物などに同じThingが重複しても、一度だけ表示する。
       $seen_ids[$seen_ids.size] = $target.thingIDNumber
 
-      $target_name = $target_pawn.name
+      $target_name = format_job_target_pawn_name $target_pawn
       if $target_name == null || $target_name == ""
         $target_name = "名前不明のポーン"
       end
@@ -453,6 +677,10 @@
     $text = $0
     $weather_text = $1
     $map_event_text = $2
+    $original_weather = $3
+    if $original_weather == null
+      $original_weather = $weather_text
+    end
 
     if $text == null || $text == ""
       $environment_result = ""
@@ -472,7 +700,7 @@
     $parts = (" " + ($text | string.replace ";" "; ")) | string.split ";"
     $location_type = $parts[0] | string.strip
     $result = ""
-    $is_orbital = $weather_text != null && ($weather_text | string.contains "軌道上")
+    $is_orbital = $original_weather != null && ($original_weather | string.contains "軌道上")
 
     if $location_type | string.contains "室内"
       $result = "区分：室内"
@@ -591,6 +819,7 @@
 
   # ===== 部分置換（内部利用）。置換後にclean_listで整形 =====
   # keyが重複・包含関係にある場合は登録順で結果が変わるため、具体的な長いkeyを先に置く
+  # chanceは表示確率。落選時は渡された1項目全体を非表示にし、当選時は必ず置換する。
   # 空のkeyはstring.replaceの例外になるため無視する。
   func partial_replace
     $text = $0
@@ -600,38 +829,40 @@
     end
     $result = $text
     for $key in ($dict | object.keys)
-      if $key != ""
-        $keyword = $dict[$key]
-        $result = $result | string.replace $key $keyword
+      if $key != "" && ($result | string.contains $key)
+        $rule = $dict[$key]
+        if dictionary_rule_passes $rule null
+          $result = $result | string.replace $key (dictionary_value $rule)
+        else
+          ret ""
+        end
       end
     end
     ret (clean_list $result)
   end
 
   # ===== 健康情報専用の置換 =====
-  # valueが空文字: keyを含むHediff項目全体を除外
-  # valueが空以外: keyに一致した部分だけをvalueへ置換
+  # chanceは表示確率。落選またはvalueが空ならHediff全体を除外し、当選時は必ず一致部分を置換。
   # 空のkeyは全項目一致や置換例外を避けるため無視する。
   func replace_health_label
     $health_text = $0
     $health_dict = $1
-
     if $health_text == null || $health_text == "" || $health_dict == null
       ret $health_text
     end
 
-    # simple function内の通常変数は呼び出し元と共有されるため、$付きのローカル変数を使う
+    # $付きのローカル変数を使い、呼び出し元の変数を上書きしない。
     $health_result = $health_text
     for $health_key in ($health_dict | object.keys)
       if $health_key != "" && ($health_result | string.contains $health_key)
-        $keyword = $health_dict[$health_key]
-        if $keyword == ""
+        $rule = $health_dict[$health_key]
+        $value = dictionary_value $rule
+        if $value == "" || !(dictionary_rule_passes $rule null)
           ret ""
         end
-        $health_result = $health_result | string.replace $health_key $keyword
+        $health_result = $health_result | string.replace $health_key $value
       end
     end
-
     ret ($health_result | string.strip)
   end
 
@@ -737,7 +968,8 @@
   end
 
   # ===== 健康情報本文と、採用したHediffの置換前ラベル一覧をまとめて返す =====
-  # GetHediffsの結果を時間・除去辞書で絞る。source_labelsは攻撃元の補足専用で、非表示項目を含めない。
+  # GetHediffsの結果を時間・来訪前の有無・除去辞書で絞る。
+  # source_labelsは攻撃元の補足専用で、非表示項目を含めない。
   func format_health_conditions
     $pawn = $0
     $threshold_ticks = $1
@@ -751,11 +983,33 @@
       ret {text: "", source_labels: []}
     end
 
+    # 通常の来訪者（トレーダーを含む）は、現在のマップに出現する前からある傷病を省く。
+    # 救助対象の傷まで消さないよう、ダウン中・入植者・囚人・奴隷は対象外。
+    # TickSpawnedはセーブ読み込みでは維持されるが、再来訪や運搬後の再配置などで更新される。
+    $visitor_spawn_tick = -1
+    if $pawn.role == "Visitor" && $pawn.Spawned && !$pawn.Downed && !$pawn.IsFreeColonist && !$pawn.IsPrisoner && !$pawn.IsSlave
+      $spawn_tick = $pawn.TickSpawned
+      if $spawn_tick != null && $spawn_tick >= 0 && $spawn_tick <= $current_game_ticks
+        $visitor_spawn_tick = $spawn_tick
+      end
+    end
+
     for $hediff in (GetHediffs $pawn)
       # ageTicksから発生時点を推定し、ゲーム開始時以前のものと表示期間（呼び出し側で40時間）超過を除く。
-      # MODがageTicksを変更する場合や、途中生成されたpawnの先天的Hediffはこの条件だけでは区別できない。
       if $hediff.ageTicks < $current_game_ticks && $hediff.ageTicks <= $threshold_ticks
-        # 空のvalueは項目全体の除外、それ以外は一致部分の置換に使う
+        if $visitor_spawn_tick >= 0
+          # 保存された追加時刻を優先。未設定・不正値ならageTicksから推定する。
+          # 出現と同じTickの初期付与も除外する。MODが後から再付与する傷病までは判別できない。
+          $added_tick = $hediff.tickAdded
+          if $added_tick == null || $added_tick <= 0 || $added_tick > $current_game_ticks
+            $added_tick = $current_game_ticks - $hediff.ageTicks
+          end
+          if $added_tick <= $visitor_spawn_tick
+            continue
+          end
+        end
+
+        # 落選・valueが空のHediffは除外し、表示する項目は必ず置換後のラベルを使う。
         $health_label = replace_health_label $hediff.LabelCap replace_dict
 
         if $health_label != null && $health_label != ""
@@ -804,10 +1058,14 @@
     end
 
     for $key in ($description_dict | object.keys)
-      $description = $description_dict[$key]
+      $rule = $description_dict[$key]
+      $description = dictionary_value $rule
       if $key != "" && $description != null && $description != ""
         for $source_label in $source_labels
           if $source_label | string.contains $key
+            if !(dictionary_rule_passes $rule null)
+              break
+            end
             if $result != ""
               $result = $result + "\n"
             end
@@ -848,7 +1106,7 @@
   end
 
   # ===== 辞書に登録された特性だけを表示する =====
-  # keyは特性名への部分一致、valueは実際に表示する名前
+  # 最初に一致したkeyのchanceでvalueを表示する。落選時は他のルールへ進まない。
   func filter_traits
     $trait_text = $0
     $trait_dict = $1
@@ -862,8 +1120,9 @@
       $trimmed_trait = $trait | string.strip
       for $trait_key in ($trait_dict | object.keys)
         if $trimmed_trait != "" && $trait_key != "" && ($trimmed_trait | string.contains $trait_key)
-          $display_trait = $trait_dict[$trait_key] | string.strip
-          if $display_trait != ""
+          $rule = $trait_dict[$trait_key]
+          $display_trait = (dictionary_value $rule) | string.strip
+          if $display_trait != "" && (dictionary_rule_passes $rule null)
             if $trait_result != ""
               $trait_result = $trait_result + ", "
             end
@@ -909,29 +1168,25 @@
   func filter_by_exact_chance
     $source_text = $0
     $chance_dict = $1
-
     if $source_text == null || $source_text == ""
       ret ""
     end
-
     $trimmed = $source_text | string.strip
-    $chance = null
-    if $chance_dict != null
-      $chance = $chance_dict[$trimmed]
+    $rule = null
+    if $chance_dict != null && $trimmed != ""
+      $rule = $chance_dict[$trimmed]
     end
-
-    if $chance == null || $chance >= 100
+    if $rule == null
       ret $trimmed
     end
-    if $chance <= 0
+    if !(dictionary_rule_passes $rule null)
       ret ""
     end
-
-    if (random 0 100) < $chance
-      ret $trimmed
+    $value = dictionary_value $rule
+    if $value != ""
+      ret $value
     end
-
-    ret ""
+    ret $trimmed
   end
 
   # ===== 現在のマップで発生中のGameConditionを取得する =====
@@ -973,8 +1228,16 @@
                   $chance_lookup_label = $base_label
                 end
               end
-              if (filter_by_exact_chance $chance_lookup_label $chance_dict) != ""
+              $rule = null
+              if $chance_dict != null && $chance_lookup_label != ""
+                $rule = $chance_dict[$chance_lookup_label]
+              end
+              if $rule == null || (dictionary_rule_passes $rule null)
                 $filtered_label = $label
+                $value = dictionary_value $rule
+                if $value != ""
+                  $filtered_label = $label | string.replace $chance_lookup_label $value
+                end
               end
             end
 
@@ -994,44 +1257,39 @@
   end
 
   # ===== 欲求を表示確率に従って抽出 =====
+  # 第3引数のreplace_dictは採用した欲求1件ずつに適用し、落選した項目だけを除外する。
   func filter_thoughts
     $text = $0
     $dict = $1
-
+    $replacement_dict = $2
     if $text == null || $text == "" || $dict == null
       ret ""
     end
-
-    $parts = $text | string.split ","
     $result = ""
-
-    for $part in $parts
+    for $part in ($text | string.split ",")
       $trimmed = $part | string.strip
-      $show = false
-
       for $key in ($dict | object.keys)
         if $trimmed != "" && $key != "" && ($trimmed | string.contains $key)
-
-          $chance = $dict[$key]
-
-          if $chance >= 100
-            $show = true
-          else if $chance > 0 && (random 0 100) < $chance
-            $show = true
+          # 最初に一致したルールだけを使う。落選しても別ルールで抽選し直さない。
+          $rule = $dict[$key]
+          if dictionary_rule_passes $rule null
+            $value = dictionary_value $rule
+            $display_text = $trimmed
+            if $value != ""
+              $display_text = $display_text | string.replace $key $value
+            end
+            $display_text = partial_replace $display_text $replacement_dict
+            if $display_text != ""
+              if $result != ""
+                $result = $result + ", "
+              end
+              $result = $result + $display_text
+            end
           end
-
           break
         end
       end
-
-      if $show
-        if $result != ""
-          $result = $result + ", "
-        end
-        $result = $result + $trimmed
-      end
     end
-
     ret $result
   end
 
@@ -1130,7 +1388,6 @@
 ~}}
 {{~
 
-  current_tick = Find.TickManager.TicksGame
   # 天候は同一マップの全参加者で共通のため、pawnループの前で一度だけ取得する
   weather_clean = filter_by_exact_chance weather weather_display_chance_dict
 
@@ -1147,10 +1404,10 @@
     end
   end
 
-  # setvar/getvarを使わず、System/Userで同じ入力から同じUN抽選値を得る。
+  # System/Userで同じ入力から同じUN抽選値を得る。
   UN_roll = 100
   if !UN_blocked_by_combat && !UN_has_drafted_pawn && UN_chance > 0 && UN_chance < 100
-    UN_roll = UN_synchronized_percent current_tick ctx.history
+    UN_roll = synchronized_percent current_tick prompt_history
   end
 
   if !UN_blocked_by_combat && !UN_has_drafted_pawn && (UN_chance >= 100 || (UN_chance > 0 && UN_roll < UN_chance))
@@ -1217,23 +1474,30 @@
       end
     end
 
-    # 表示対象の欲求だけ抽出
-    thoughts_filtered = filter_thoughts p.thoughts thought_display_dict
+    # 欲求の選別後、replace_dictの表示判定・置換を項目ごとに行う。
+    # 抽選は一度だけ行い、性格の判定文脈と最終表示で同じ文字列を使う。
+    thoughts_clean = filter_thoughts p.thoughts thought_display_dict replace_dict
+    gender_clean = partial_replace p.gender replace_dict
 
     # 辞書に登録された特性だけ抽出し、辞書のvalueで表示名を整える
     traits_filtered = filter_traits p.traits trait_display_dict
 
-    # ゲーム内部の所属は変えず、プロンプトに表示する派閥名だけを変更する
+    # ゲーム内部の所属は変えず、派閥名の表示判定と置換だけを行う。
     faction_clean = format_faction_name p.faction faction_display_dict
 
     # 現在の会話参加者、または作業対象に関係する人物関係だけを抽出
     relations_filtered = filter_relations p.fullrelation prompt_pawns p.job
 
-    # 作業用の不要語を除去してから、対象の補助説明を加える
-    job_clean = partial_replace p.job job_replace_dict
+    # 実際の動物ターゲットに付く末尾番号を整えてから、作業用の辞書を適用する
+    job_clean = format_job_animal_target_names p.job p
+    job_clean = partial_replace job_clean job_replace_dict
     job_clean = partial_replace job_clean pawn_description_dict
-    # 辞書による名前の置換とは独立して、実際の生存pawn・遺体から取得した補足を最後に加える。
-    job_target_notes = format_job_pawn_target_notes p faction_display_dict
+    # 辞書で作業本文を非表示にした場合、対象の補足だけが残らないようにする。
+    # 元のp.job自体が空の場合は、実際の作業対象からの補足を引き続き使用する。
+    job_target_notes = ""
+    if p.job == null || p.job == "" || (job_clean != null && job_clean != "")
+      job_target_notes = format_job_pawn_target_notes p faction_display_dict
+    end
     if job_target_notes != ""
       if job_clean != null && job_clean != ""
         job_clean = job_clean + "\n" + job_target_notes
@@ -1246,19 +1510,21 @@
     map_events_clean = format_map_events map map_event_display_chance_dict p.gender
 
     # 発生中の天候・マップイベントを、pawnごとの場所へ補足する
-    location_clean = format_location p.location weather_clean map_events_clean
+    location_clean = format_location p.location weather_clean map_events_clean weather
 
     # 1. 性格の条件タグを判定するため、最終出力と同じ材料から検索専用contextを先に作る
     # 下のblock組み立てと一部重複するが、性格を所定位置へ出すために必要な2段階処理
     temp_context = ""
-    temp_context = temp_context + p.name + " " + p.age + "歳" + " " + (partial_replace p.gender replace_dict) + "\n"
-    # 性格タグは旧名・表示名のどちらでも反応できるよう、判定専用contextには両方を含める
-    temp_context = temp_context + (prepare_field "派閥"           (p.faction + " " + faction_clean) null null)
+    temp_context = temp_context + p.name + " " + p.age + "歳" + " " + gender_clean + "\n"
+    # 表示する派閥だけ、旧名・表示名のどちらでも性格タグが反応できるようにする。
+    if faction_clean != ""
+      temp_context = temp_context + (prepare_field "派閥"           (p.faction + " " + faction_clean) null null)
+    end
     temp_context = temp_context + (prepare_field "特性"           traits_filtered null       null)
     temp_context = temp_context + (prepare_field "健康情報"       health_context   null null)
     temp_context = temp_context + (prepare_field "装備"           equipment_clean equipment_display_flag null)
     temp_context = temp_context + (prepare_field "人物関係" relations_filtered null null)
-    temp_context = temp_context + (prepare_field "欲求" thoughts_filtered null replace_dict)
+    temp_context = temp_context + (prepare_field "欲求" thoughts_clean null null)
     temp_context = temp_context + (prepare_field "場所"           location_clean  null       null)
     temp_context = temp_context + (prepare_field "作業内容"       job_clean       null       null)
     if UN_text != ""
@@ -1271,7 +1537,7 @@
 
     # 3. 本番の block 組み立て（特殊シーンでは人物の基本設定だけを渡す）
     block = ""
-    block = block + p.name + " " + p.age + "歳" + " " + (partial_replace p.gender replace_dict) + "\n"
+    block = block + p.name + " " + p.age + "歳" + " " + gender_clean + "\n"
     block = block + (prepare_field "性格"           personality_clean null    null)
     if UN_pawn == null
       block = block + (prepare_field "派閥"           faction_clean   null       null)
@@ -1279,7 +1545,7 @@
       block = block + (prepare_field "健康情報"       health_context   null null)
       block = block + (prepare_field "装備"           equipment_clean equipment_display_flag null)
       block = block + (prepare_field "人物関係" relations_filtered null null)
-      block = block + (prepare_field "欲求" thoughts_filtered null replace_dict)
+      block = block + (prepare_field "欲求" thoughts_clean null null)
       block = block + (prepare_field "場所"           location_clean  null       null)
       block = block + (prepare_field "作業内容"       job_clean       null       null)
     end
