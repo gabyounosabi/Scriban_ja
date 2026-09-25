@@ -6,9 +6,10 @@
 
 1. RimTalkのプロンプト設定画面で「新しいプロンプトプリセット」を作成します。
 2. `JSON Format`、`Chat History`、`Dialogue Prompt` の3つの設定を**オフ**にします。
-3. `Base Instruction` の入力欄を `Base Instruction.txt` の全文で上書きし、Role（ロール）を `System` に設定します。
-4. `Context` の入力欄を `Context.txt` の全文で上書きし、Role（ロール）を `User` に設定します。
-5. その他のRimTalkの設定は、後述の「おすすめ設定」の画像に合わせてください。
+3. エントリ側の緑色の＋ボタンを押し、新たにエントリを追加した後　`Dictionaries.txt` の全文を貼り付け、最上部へ移動させます。
+4. `Base Instruction` の入力欄を `Base Instruction.txt` の全文で上書きし、Role（ロール）を `System` に設定します。
+5. `Context` の入力欄を `Context.txt` の全文で上書きし、Role（ロール）を `User` に設定します。
+6. その他のRimTalkの設定は、後述の「おすすめ設定」の画像に合わせてください。
 
 ### ペルソナ設定の条件記法
 
