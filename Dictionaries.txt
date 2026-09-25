@@ -1,0 +1,189 @@
+{{~
+  # ===== UN（ユニークシーン）変数 =====
+  # このファイルは「辞書」専用エントリへ全文を貼り付け、System・Userより前に配置する。
+  # 辞書と共通設定の変更はここだけでよい。生成するプロンプト本文には何も出力しない。
+
+  # UNの対象性別："Male" / "Female" / "ALL"（性別を問わない）
+  UN_gender = "Female"
+
+  # 対象条件を満たした場合のUN発火率。0で無効、100で必ず発火する
+  UN_chance = 50
+
+  # UN発火時のSystem指示文。{name}は対象pawnの名前へ自動的に置換される
+  UN_instruction = "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
+
+  # ===== 辞書の共通書式 =====
+  # "検索キー": { value: "置換・表示する文字列", chance: 100 }
+  # 左側の文字列がkey（検索語）、valueが置換・表示する文字列、chanceが表示・採用確率。
+  # chanceは0～100。0では必ず落選、100では必ず当選する。
+  # 当選時は指定の置換を必ず行い、落選時は対象の表示・採用を見送る。対象範囲とvalue=""の意味は各辞書を参照。
+  # 旧書式（文字列だけ／確率だけ）も読み込めるが、新しく追加する項目は上の書式に統一する。
+
+  # ===== UNで検出するシーンの辞書 (実験的機能、用途がなければ編集しなくて大丈夫です)=====
+  # fullinteractionを行順に部分一致検索し、一致がなければ未置換のp.jobも検索する。
+  # valueが空なら一致した原文行を使用し、文章を入れると原文行全体をその文章へ置き換える。
+  # chanceはそのkeyを採用する確率。UN_chanceの抽選も通る必要がある（50と50なら概ね25%）。
+  # 同じkeyの落選は他の行・p.job・別pawnでも再抽選しない。採用可能なkeyのうち行順・登録順を優先する。
+  # 辞書を空にするとUNは発火しない。System/Userは同じ辞書を読み込む。
+  UN_keyword = {
+    "サッカーボール": { value: "", chance: 100 },
+    "バスケットボール": { value: "", chance: 100 },
+  }
+
+  # UN対象の最低生物学的年齢（以上）。20なら20歳以上が対象。
+  UN_min_age = 20
+
+  # ===== プロンプトに表示する派閥名の変更 =====
+  # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前。
+  # chanceは派閥名の表示確率。落選時は名前を省き、当選時はvalueの名前を使う（空なら元の名前）。
+  # System/Userで同じ抽選結果を使う。名前の表示有無は所属・敵味方の判定に影響しない。
+  faction_display_dict = {
+    "闇の存在": { value: "異形", chance: 100 },
+    "古代人": { value: "古代の機械文明", chance: 100 },
+  }
+
+  # ===== 除外/置換キーワード（前半部分は消さないでください） =====
+  # 影響箇所：冒頭の性別表示、【健康情報】、【装備】の武器名、【欲求】。
+  # chanceは一致した項目の表示確率。当選時は必ず置換し、落選時はその項目全体を非表示にする。
+  # 非表示の単位は性別・武器名・欲求1件・Hediff1件。未登録の項目はそのまま残す。
+  # 性別表示・【装備】・【欲求】では一致部分をvalueへ置換し、valueが空なら一致部分だけを除去する。
+  # 【健康情報】ではvalueが空ならchanceにかかわらずHediff項目全体を除外する。出血要約は辞書の対象外。
+  # 一致するルールを登録順に適用する。複数に一致した項目は全ての抽選を通った場合だけ表示する。
+  # 置換後の各欄は、ペルソナの{"キーワード"}条件を判定する文脈にも使われる。
+  replace_dict = {
+    "Male": { value: "男性", chance: 100 },
+    "Female": { value: "女性", chance: 100 },
+    "Traits: ": { value: "", chance: 100 },
+    "Relations: ": { value: "", chance: 100 },
+    "Equipment: ": { value: "", chance: 100 },
+    "Memory: ": { value: "", chance: 100 },
+    "[Weapon]": { value: "武器：", chance: 100 },
+    "[Apparel]": { value: "衣服：", chance: 100 },
+    # ここから下は自由
+    "不死": { value: "", chance: 100 },
+    "不老": { value: "", chance: 100 },
+    "膨張": { value: "", chance: 100 },
+    "メカリンク": { value: "", chance: 100 },
+    "豪華な宿舎": { value: "", chance: 100 },
+    "侵蝕された眼": { value: "", chance: 100 },
+    "制御不能な触手": { value: "", chance: 100 },
+    "再生 (": { value: "", chance: 100 },
+    "復活": { value: "", chance: 100 },
+    "取り外された": { value: "", chance: 100 }, # 義肢移植などで並ぶ「取り外された」の部位項目を非表示にする。
+    "耐性": { value: "", chance: 100 }, # たばこ耐性等を非表示にしノイズを減らす
+    "健康の教え": { value: "", chance: 100 },
+    "グルメ料理": { value: "", chance: 100 },
+    "ホットソースを食事で摂取": { value: "トウガラシが効いた美味しい料理を食べた", chance: 30 },
+  }
+
+  # ===== 作業内容専用の除去/置換 =====
+  # keyに部分一致した箇所をvalueへ順に置換する。valueが空なら一致部分だけを除去する。
+  # chanceは作業内容の表示確率。落選時は作業本文と作業対象の補足を非表示にする。空のkeyは無視する。
+  # 表示の変更で、元のp.jobを使う戦闘・狩猟・UNの判定は変わらない。
+  job_replace_dict = {
+    "traveling to: ": { value: "", chance: 100 },
+    "Traveling to: ": { value: "", chance: 100 },
+    "traveling to": { value: "", chance: 100 },
+    "Traveling to": { value: "", chance: 100 },
+    # ここから下は自由
+    "木材を精製中": { value: "木材をバイオ液化燃料に精製中", chance: 100 },
+    "有機物を精製中": { value: "有機物をバイオ液化燃料に精製中", chance: 100 },
+    "グルメスープ": { value: "肉野菜ベースの美味しいスープ", chance: 100 },
+    "PON": { value: "", chance: 100 },
+  }
+
+  # ===== 作業対象・攻撃元・襲撃対象の補助情報 =====
+  # 作業内容ではkeyへの一致部分をvalueへ置換する。valueが空なら一致部分を除去する。
+  # 健康情報では、表示対象Hediffの置換前ラベルにkeyがあればvalueをkeyごとに一度だけ補足する。
+  # 健康情報のvalueが空の場合や、除外済みHediffには補足しない。
+  # chanceはそれぞれの表示確率。作業側で落選したら作業本文と対象の補足を非表示にする。
+  # 健康側の落選は攻撃元の補足だけを非表示にし、怪我そのものは残す（怪我の表示はreplace_dictで設定）。
+  # 襲撃の敵構成では種別名の一致部分を置換する。落選時は種別名だけを省き、大分類と警告は残す。
+  pawn_description_dict = {
+    "パイクマン": { value: "パイクマン：ニードルガンを装備した長距離戦闘用メカノイド", chance: 100 },
+    "セントリードローン": { value: "セントリードローン：スキャッターガンを装備した旧式の敵性メカ", chance: 100 },
+    "ハイブクイーン": { value: "ハイブクイーン：巨大な体格を持つ虫の女王", chance: 100 },
+  }
+
+  # ===== 表示する特性 =====
+  # keyへの部分一致で最初に一致したルールを使い、chanceの確率でvalueを表示する。
+  # 未登録・落選・valueが空なら特性を非表示にする。空のkeyは無視する。
+  trait_display_dict = {
+    "勤労者": { value: "働き者", chance: 100 },
+  }
+
+  # ===== 欲求の表示確率 =====
+  # keyは部分一致。最初に一致したルールのchanceで表示し、未登録・落選は非表示にする。
+  # valueが空なら元の欲求を表示し、空でなければkeyに一致した部分をvalueへ置換する。
+  thought_display_dict = {
+    "ライバル": { value: "", chance: 0 }, #ライバル関係はノイズなので飛ばす
+    "親友": { value: "", chance: 0 }, #親友関係は血縁と重複しがちなので飛ばす
+    "死んだ": { value: "", chance: 10 }, #◯◯が死んだ系を10%で拾う
+  }
+
+  # ===== 日常的な天候の表示確率 =====
+  # keyに完全一致した天候をchanceの確率で表示する。落選は非表示、未登録は常時表示。
+  # valueが空なら元の天候名を使い、空でなければその表示名へ置換する。
+  # 軌道上の温度除外は置換・非表示にする前の天候で判定する。
+  weather_display_chance_dict = {
+    "快晴": { value: "", chance: 10 },
+    "霧": { value: "", chance: 10 },
+    "雨": { value: "", chance: 10 },
+    "霧雨": { value: "", chance: 10 },
+    "小雪": { value: "", chance: 10 },
+  }
+
+  # ===== マップイベントの表示確率 =====
+  # keyは完全な表示名、またはGameCondition本体の名前。完全な表示名への一致を優先する。
+  # chanceは表示確率。落選は非表示、未登録は常時表示。valueが空なら元の表示名を使う。
+  # valueが空でなければ一致箇所を置換し、本体名で一致した場合は性別・強度の接尾情報を残す。
+  # 対象性別は置換前の表示名で判定するため、valueで名前を変えても対象者は変わらない。
+  map_event_display_chance_dict = {
+    "オーロラ": { value: "", chance: 100 },
+    "サイコスード": { value: "", chance: 50 },
+    "サイコドローン": { value: "", chance: 50 },
+    "火山の冬": { value: "遠くで発生した火山灰によって太陽光が遮られ、気温が下がっています", chance: 30 },
+    "えら腐敗菌": { value: "えら腐敗菌という寄生菌によってこの地域の魚の数が減少しています", chance: 10 },
+  }
+
+  # ===== トレーダー種別名の変更 =====
+  # chanceは種別情報の表示確率。当選時は必ず一致部分をvalueへ置換し、空なら一致部分を除去する。
+  # 落選時は該当種別の滞在情報を非表示にする。同じ種別名は一度だけ抽選する。長いkeyを先に置く。
+  trader_kind_replace_dict = {
+    "呪い商": { value: "部族の闇行商", chance: 100 },
+  }
+
+  # ===== 現在地のバイオームをSystemへ表示する確率 =====
+  # 0で非表示、100で常時表示。MODで追加されたバイオームにも同じ確率を適用する
+  biome_display_chance = 10
+
+  # 喧嘩終了後、このtick数以内だけ会話の口調へ怒りや気まずさを反映する。
+  # 怪我の由来表示はUser側で別管理。表示対象の健康情報と、40時間以内の喧嘩メモリがある間だけ表示する。
+  social_fight_aftermath_ticks = 2500
+
+  # ===== 共有用の保存処理（ここから下は通常、編集不要） =====
+  # setvarは「名前を付けて他のエントリへ渡す」関数。辞書を文字列化せず、そのまま保存する。
+  # 全設定を一つにまとめ、最後に一度だけ保存することで、途中までの設定が渡るのを避ける。
+  shared_config = {
+    UN_gender: UN_gender,
+    UN_chance: UN_chance,
+    UN_instruction: UN_instruction,
+    UN_min_age: UN_min_age,
+    UN_keyword: UN_keyword,
+    faction_display_dict: faction_display_dict,
+    replace_dict: replace_dict,
+    job_replace_dict: job_replace_dict,
+    pawn_description_dict: pawn_description_dict,
+    trait_display_dict: trait_display_dict,
+    thought_display_dict: thought_display_dict,
+    weather_display_chance_dict: weather_display_chance_dict,
+    map_event_display_chance_dict: map_event_display_chance_dict,
+    trader_kind_replace_dict: trader_kind_replace_dict,
+    biome_display_chance: biome_display_chance,
+    social_fight_aftermath_ticks: social_fight_aftermath_ticks,
+  }
+  # @は関数を実行せず存在を確認する書き方。setvar非対応の環境では保存をスキップする。
+  if @setvar != null
+    setvar "Scriban_ja_config" shared_config
+  end
+~}}
