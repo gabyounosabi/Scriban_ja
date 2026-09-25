@@ -19,7 +19,7 @@
   # 当選時は指定の置換を必ず行い、落選時は対象の表示・採用を見送る。対象範囲とvalue=""の意味は各辞書を参照。
   # 旧書式（文字列だけ／確率だけ）も読み込めるが、新しく追加する項目は上の書式に統一する。
 
-  # ===== UNで検出するシーンの辞書 (実験的機能、用途がなければ編集しなくて大丈夫です)=====
+  # ===== UNで検出するシーンの辞書 =====
   # fullinteractionを行順に部分一致検索し、一致がなければ未置換のp.jobも検索する。
   # valueが空なら一致した原文行を使用し、文章を入れると原文行全体をその文章へ置き換える。
   # chanceはそのkeyを採用する確率。UN_chanceの抽選も通る必要がある（50と50なら概ね25%）。
@@ -62,7 +62,6 @@
     # ここから下は自由
     "不死": { value: "", chance: 100 },
     "不老": { value: "", chance: 100 },
-    "膨張": { value: "", chance: 100 },
     "メカリンク": { value: "", chance: 100 },
     "豪華な宿舎": { value: "", chance: 100 },
     "侵蝕された眼": { value: "", chance: 100 },
@@ -146,6 +145,18 @@
     "えら腐敗菌": { value: "えら腐敗菌という寄生菌によってこの地域の魚の数が減少しています", chance: 10 },
   }
 
+  # ===== 温度のしきい値と表示確率 =====
+  # max以上またはmin以下の時だけ、chance（0〜100%）で表示する。0は非表示、100は必ず表示。
+  # 室内温度はポーンごとに抽選し、そのポーンの【場所】に表示する。
+  # 外気温はマップから取得し、人数に関係なく一度だけ抽選してUserプロンプト末尾へ表示する。
+  # 軌道上とUNシーンでは、どちらの温度も表示しない。
+  indoor_temperature_max = 50
+  indoor_temperature_min = -20
+  indoor_temperature_chance = 100
+  outdoor_temperature_max = 40
+  outdoor_temperature_min = -15
+  outdoor_temperature_chance = 100
+
   # ===== トレーダー種別名の変更 =====
   # chanceは種別情報の表示確率。当選時は必ず一致部分をvalueへ置換し、空なら一致部分を除去する。
   # 落選時は該当種別の滞在情報を非表示にする。同じ種別名は一度だけ抽選する。長いkeyを先に置く。
@@ -178,6 +189,12 @@
     thought_display_dict: thought_display_dict,
     weather_display_chance_dict: weather_display_chance_dict,
     map_event_display_chance_dict: map_event_display_chance_dict,
+    indoor_temperature_max: indoor_temperature_max,
+    indoor_temperature_min: indoor_temperature_min,
+    indoor_temperature_chance: indoor_temperature_chance,
+    outdoor_temperature_max: outdoor_temperature_max,
+    outdoor_temperature_min: outdoor_temperature_min,
+    outdoor_temperature_chance: outdoor_temperature_chance,
     trader_kind_replace_dict: trader_kind_replace_dict,
     biome_display_chance: biome_display_chance,
     social_fight_aftermath_ticks: social_fight_aftermath_ticks,
