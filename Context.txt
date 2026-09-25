@@ -412,7 +412,7 @@
   end
 
   # 動物へ自動付与された末尾番号（例：「ヤク 9」）だけを表示名から除く。
-  # 種族名または性別固有ラベルと「番号を除いた名前」が完全一致する場合に限定し、人名・物品名・数量には触れない。
+  # 現在の種別名（幼体名を含む）・種族名・性別固有ラベルと「番号を除いた名前」が一致する場合に限定する。
   func format_job_target_pawn_name
     $target_pawn = $0
     if $target_pawn == null
@@ -430,6 +430,12 @@
     $name_without_number = $target_name | regex.replace "[ 　]+[0-9０-９]+$" ""
     if $name_without_number == $target_name
       ret $target_name
+    end
+
+    # KindLabelは年齢段階を反映するため、「子ウシ 5」のような幼体の自動名も照合できる。
+    $kind_label = $target_pawn.KindLabel
+    if $kind_label != null && $kind_label != "" && ($name_without_number | string.downcase) == (("" + $kind_label) | string.downcase)
+      ret $name_without_number
     end
 
     $race_label = $target_pawn.def.LabelCap
