@@ -12,6 +12,12 @@
 5. `Context` の入力欄を `Context.txt` の全文で上書きし、Role（ロール）を `User` に設定します。
 6. その他のRimTalkの設定は、後述の「おすすめ設定」の画像に合わせてください。
 
+## よくあるエラー
+
+#### [RimTalk] Request failed: 400 - [400] * GenerateContentRequest.contents: contents is not specified
+`Base Instruction`や`Context`のロール設定が正しく行われていない可能性があります。
+または、使用しているLLMのスペックが足りず、正しいJSONを返せていない可能性があります。Gemma 4以上のモデルを推奨します。
+
 ### ペルソナ設定の条件記法
 
 以下の専用構文を使うことで、ポーンのペルソナ（性格設定）を特定の条件でのみ反映させることができます。
