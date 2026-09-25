@@ -356,11 +356,12 @@
     ret false
   end
 
-  # ===== 集計対象の敵を絞る（死亡・ダウン・非活動・休眠・未探索の部屋を除外） =====
+  # ===== 集計対象の敵を絞る（死亡・ダウン・非活動・休眠・未探索を除外） =====
   # EverSeenByPlayerはスタイル用Compの値なので使わない。
-  # Scribanから呼べないFogGrid.IsFoggedの代わりに、座標からRegion.Room.Foggedを参照する。
-  # Room.Foggedは部屋の代表セルの霧判定で、個体の厳密な視認判定やMOD独自の不可視判定ではない。
-  # Regionが取れない場合は視認状態を断定せず、活動状態など残りの条件で判定する。
+  # 公開されているfogGrid配列があれば、敵のいるマス自体が未探索かを判定する。
+  # 配列を公開しないゲーム版では部屋の代表セル（Room.Fogged）を補助判定に使う。
+  # 座標・部屋情報などを取得できず、探索済みと確認できない敵は集計しない。
+  # MOD独自の視界制限や、単にカメラの画面外にいるかどうかの判定ではない。
   func is_active_map_hostile
     $map_pawn = $0
     $current_map = $1
@@ -374,22 +375,37 @@
       ret false
     end
 
-    if $current_map != null && $current_map.regionGrid != null
-      $position = $map_pawn.Position
-      $map_size = $current_map.Size
-      if $position != null && $map_size != null && $position.x >= 0 && $position.z >= 0 && $position.x < $map_size.x && $position.z < $map_size.z
-        # CellToIndexと同じ添字。範囲確認後にのみ配列を参照する。
-        $cell_index = $position.z * $map_size.x + $position.x
-        $regions = $current_map.regionGrid.DirectGrid
-        if $regions != null && $cell_index < $regions.size
-          $region = $regions[$cell_index]
-          if $region != null && $region.valid && $region.Room != null && $region.Room.Fogged
-            ret false
-          end
+    if $current_map == null
+      ret false
+    end
+    $position = $map_pawn.Position
+    $map_size = $current_map.Size
+    if $position == null || $map_size == null || $position.x < 0 || $position.z < 0 || $position.x >= $map_size.x || $position.z >= $map_size.z
+      ret false
+    end
+    # CellToIndexと同じ添字。マップ範囲と配列の長さを確認してから読む。
+    $cell_index = $position.z * $map_size.x + $position.x
+    if $current_map.fogGrid != null
+      $fog_cells = $current_map.fogGrid.fogGrid
+      # 非公開の格納領域や配列以外の型を添字で参照しない。
+      if ($fog_cells | object.typeof) == "array"
+        if $cell_index >= $fog_cells.size
+          ret false
+        end
+        ret $fog_cells[$cell_index] == false
+      end
+    end
+
+    if $current_map.regionGrid != null
+      $regions = $current_map.regionGrid.DirectGrid
+      if $regions != null && $cell_index < $regions.size
+        $region = $regions[$cell_index]
+        if $region != null && $region.valid && $region.Room != null
+          ret $region.Room.Fogged == false
         end
       end
     end
-    ret true
+    ret false
   end
 
   # 敵の種別名を、会話へ必要な大分類に分ける。
