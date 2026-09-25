@@ -12,7 +12,7 @@
 5. `Context` の入力欄を `Context.txt` の全文で上書きし、Role（ロール）を `User` に設定します。
 6. その他のRimTalkの設定は、後述の「おすすめ設定」の画像に合わせてください。
 
-## よくあるエラー
+### よくあるエラー
 
 #### [RimTalk] Request failed: 400 - [400] * GenerateContentRequest.contents: contents is not specified
 `Base Instruction`や`Context`のロール設定が正しく行われていない可能性があります。
