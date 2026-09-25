@@ -46,6 +46,12 @@
   thought_display_dict = config_or_default "thought_display_dict" {}
   weather_display_chance_dict = config_or_default "weather_display_chance_dict" {}
   map_event_display_chance_dict = config_or_default "map_event_display_chance_dict" {}
+  indoor_temperature_max = config_or_default "indoor_temperature_max" 35
+  indoor_temperature_min = config_or_default "indoor_temperature_min" (-10)
+  indoor_temperature_chance = config_or_default "indoor_temperature_chance" 100
+  outdoor_temperature_max = config_or_default "outdoor_temperature_max" 40
+  outdoor_temperature_min = config_or_default "outdoor_temperature_min" (-20)
+  outdoor_temperature_chance = config_or_default "outdoor_temperature_chance" 100
 
   # 1回のテンプレート生成で共通の入力を使い、途中でTickや履歴を読み直さない。
   current_tick = Find.TickManager.TicksGame
@@ -583,8 +589,8 @@
     ret $notes | array.join "\n"
   end
 
-  # ===== 場所情報を一定の形式に整え、天候・外部環境を補う =====
-  # 温度は35℃以上または-10℃以下の場合だけ表示し、軌道上では表示しない
+  # ===== 場所情報を整える。温度は室内のみ、しきい値と表示確率で判定する =====
+  # 外気温はポーンごとに出さず、プロンプト末尾にまとめて表示する。
   func format_location
     $text = $0
     $weather_text = $1
@@ -613,8 +619,9 @@
     $location_type = $parts[0] | string.strip
     $result = ""
     $is_orbital = $original_weather != null && ($original_weather | string.contains "軌道上")
+    $is_indoor = $location_type | string.contains "室内"
 
-    if $location_type | string.contains "室内"
+    if $is_indoor
       $result = "区分：室内"
     else if $location_type | string.contains "外気"
       $result = "区分：屋外"
@@ -630,14 +637,16 @@
       end
     end
 
-    # p.locationの2要素目はpawn位置の実温度。会話に影響しやすい極端な時だけ残す
-    if $parts.size > 1 && !$is_orbital
+    # 室内の極端な温度だけ、ポーンごとに一度抽選する。軌道上では温度を省く。
+    if $parts.size > 1 && $is_indoor && !$is_orbital
       $temperature_text = $parts[1] | string.strip
       if $temperature_text != ""
         $temperature_number_text = $temperature_text | string.replace "℃" "" | string.replace "°" "" | string.replace "C" "" | string.replace "c" "" | string.strip
         $temperature_value = $temperature_number_text | string.to_float
-        if $temperature_value != null && ($temperature_value >= 35 || $temperature_value <= -10)
-          $result = $result + " / 温度：" + $temperature_text
+        if $temperature_value != null && ($temperature_value >= indoor_temperature_max || $temperature_value <= indoor_temperature_min)
+          if dictionary_rule_passes indoor_temperature_chance
+            $result = $result + " / 温度：" + $temperature_text
+          end
         end
       end
     end
@@ -1465,6 +1474,18 @@
     block + "\n"
     
 
+  end
+
+  # temperatureはRimTalkが公開するマップの外気温（摂氏の数値文字列）。
+  # 室内にいる人だけの会話でも取得できる。人数に関係なく、末尾で一度だけ抽選・表示する。
+  # 特殊シーンと軌道上では表示しない。取得できない場合も省略する。
+  if UN_pawn == null && prompt_pawns.size > 0 && !(weather | string.contains "軌道上")
+    outdoor_temperature = ("" + temperature) | string.to_float
+    if outdoor_temperature != null && (outdoor_temperature >= outdoor_temperature_max || outdoor_temperature <= outdoor_temperature_min)
+      if dictionary_rule_passes outdoor_temperature_chance
+        "気温：" + outdoor_temperature + "℃\n"
+      end
+    end
   end
 ~}}
 
