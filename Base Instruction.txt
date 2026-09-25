@@ -1,69 +1,37 @@
 {{~
-  # ===== UN（ユニークシーン）変数 =====
-  # UNはSystem、User両方にあるため、変更する時は必ず両方を揃える
+  # ===== 共通設定の取得（設定を変える時はDictionaries.scribanを編集） =====
+  # 「辞書」エントリを先に実行する。getvarによる読み込みは、この一か所だけ。
+  # @は関数を実行せず存在を確認する書き方。getvar非対応・未取得なら空の設定で続行する。
+  shared_config = {}
+  if @getvar != null
+    shared_config = getvar "Scriban_ja_config"
+  end
+  if (shared_config | object.typeof) != "object"
+    shared_config = {}
+  end
 
-  # UNの対象性別："Male" / "Female" / "ALL"（性別を問わない）
-  UN_gender = "Female"
+  # 設定名と初期値を渡す。未設定・型違いなら初期値、正しい型なら取得した値を使う。
+  # 空の辞書や0も有効な設定なので、ユーザーが無効化した項目を勝手に復活させない。
+  func config_or_default
+    $value = shared_config[$0]
+    $default = $1
+    if (object.typeof $value) == (object.typeof $default)
+      ret $value
+    end
+    ret $default
+  end
 
-  # 対象条件を満たした場合のUN発火率。0で無効、100で必ず発火する
-  UN_chance = 50
-
-  # UN発火時のSystem指示文。{name}は対象pawnの名前へ自動的に置換される
-  UN_instruction = "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
-
-  # ===== 辞書の共通書式 =====
-  # "検索キー": { value: "置換・表示する文字列", chance: 100 }
-  # 左側の文字列がkey（検索語）、valueが置換・表示する文字列、chanceが表示・採用確率。
-  # chanceは0～100。0では必ず落選、100では必ず当選する。
-  # 当選時は指定の置換を必ず行い、落選時は対象の表示・採用を見送る。対象範囲とvalue=""の意味は各辞書を参照。
-  # 旧書式（文字列だけ／確率だけ）も読み込めるが、新しく追加する項目は上の書式に統一する。
-
-  # ===== UNで検出するシーンの辞書 =====
-  # fullinteractionを行順に部分一致検索し、一致がなければ未置換のp.jobも検索する。
-  # valueが空なら一致した原文行を使用し、文章を入れると原文行全体をその文章へ置き換える。
-  # chanceはそのkeyを採用する確率。UN_chanceの抽選も通る必要がある（50と50なら概ね25%）。
-  # 同じkeyの落選は他の行・p.job・別pawnでも再抽選しない。採用可能なkeyのうち行順・登録順を優先する。
-  # 辞書を空にするとUNは発火しない。System/Userでは辞書の内容も同じにする。
-  UN_keyword = {
-    "サッカーボール": { value: "", chance: 100 },
-    "バスケットボール": { value: "", chance: 100 },
-  }
-
-  # ===== プロンプトに表示する派閥名の変更 =====
-  # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前。
-  # chanceは派閥名の表示確率。落選時は名前を省き、当選時はvalueの名前を使う（空なら元の名前）。
-  # System/Userで同じ抽選結果を使う。名前の表示有無は所属・敵味方の判定に影響しない。
-  # プレイヤー派閥名を省く場合は「プレイヤー陣営」と表記し、敵の警告は名前なしでも表示する。
-  faction_display_dict = {
-    "闇の存在": { value: "異形", chance: 100 },
-    "古代人": { value: "古代の機械文明", chance: 100 },
-  }
-
-  # ===== 襲撃対象の補助情報 =====
-  # マップ上の敵構成に含まれる種別名へkeyで部分一致し、一致部分をvalueへ置換する。
-  # chanceは一致した種別名の表示確率。当選時は必ず置換し、落選時はその種別名だけを省く。
-  # valueが空なら一致部分だけを除去する。種別名を省いても、敵の大分類と脅威の警告は残す。
-  # User側のpawn_description_dictと同じ内容にする。
-  pawn_description_dict = {
-    "パイクマン": { value: "パイクマン：ニードルガンを装備した長距離戦闘用メカノイド", chance: 100 },
-    "セントリードローン": { value: "セントリードローン：スキャッターガンを装備した旧式の敵性メカ", chance: 100 },
-    "ハイブクイーン": { value: "ハイブクイーン：巨大な体格を持つ虫の女王", chance: 100 },
-  }
-
-  # ===== トレーダー種別名の変更 =====
-  # chanceは種別情報の表示確率。当選時は必ず一致部分をvalueへ置換し、空なら一致部分を除去する。
-  # 落選時は該当種別の滞在情報を非表示にする。同じ種別名は一度だけ抽選する。長いkeyを先に置く。
-  trader_kind_replace_dict = {
-    "呪い商": { value: "部族の闇行商", chance: 100 },
-  }
-
-  # ===== 現在地のバイオームをSystemへ表示する確率 =====
-  # 0で非表示、100で常時表示。MODで追加されたバイオームにも同じ確率を適用する
-  biome_display_chance = 10
-
-  # 喧嘩終了後、このtick数以内だけ会話の口調へ怒りや気まずさを反映する。
-  # 怪我の由来表示はUser側で別管理。表示対象の健康情報と、40時間以内の喧嘩メモリがある間だけ表示する。
-  social_fight_aftermath_ticks = 2500
+  # ===== 取得した設定の割り当てと、取得できない場合の初期値 =====
+  # UNの辞書は空、発火率は0を初期値にし、取得失敗時は通常会話に戻す。
+  UN_gender = config_or_default "UN_gender" "Female"
+  UN_chance = config_or_default "UN_chance" 0
+  UN_keyword = config_or_default "UN_keyword" {}
+  faction_display_dict = config_or_default "faction_display_dict" {}
+  pawn_description_dict = config_or_default "pawn_description_dict" {}
+  UN_instruction = config_or_default "UN_instruction" "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
+  trader_kind_replace_dict = config_or_default "trader_kind_replace_dict" {}
+  biome_display_chance = config_or_default "biome_display_chance" 10
+  social_fight_aftermath_ticks = config_or_default "social_fight_aftermath_ticks" 2500
 
   # 1回のテンプレート生成で共通の入力を使い、途中でTickや履歴を読み直さない。
   current_tick = Find.TickManager.TicksGame
@@ -269,8 +237,8 @@
     ret $result
   end
 
-  # UN対象の最低生物学的年齢（以上）。User側と同じ値にする。
-  UN_min_age = 20
+  # UN対象の最低年齢。変更はDictionaries.scribanで行う。未取得なら20歳以上。
+  UN_min_age = config_or_default "UN_min_age" 20
 
   # 年齢・性別・キーワードが一致する最初のpawnと置換済みシーン文を返す。一致なしはnull。
   # 戦闘・徴兵・確率の判定は呼び出し側で済ませ、一致文字列の再検索を避ける。
@@ -1350,7 +1318,7 @@
     prompt_pawns = [UN_pawn]
     UN_line = UN_scene.text
     system_prompt = (UN_instruction | string.replace "{name}" UN_pawn.name) + UN_line
-    output_rules = "textは200文字程度"
+    output_rules = "発言は2回まで、textは200文字程度"
   else
     prompt_pawns = pawns
     system_prompt = build_system_prompt prompt_pawns player_faction_name map
