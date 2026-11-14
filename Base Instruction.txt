@@ -998,7 +998,7 @@
             ret ""
           end
           $replacement = dictionary_value $rule
-          if $replacement != "" && (dictionary_mode $rule "partial") == "full"
+          if (dictionary_mode $rule "partial") == "full"
             ret $replacement
           end
           $matched = true
@@ -1291,7 +1291,7 @@
             $rule = $dict[$key]
             if dictionary_rule_passes $rule null
               $value = dictionary_value $rule
-              if $value != "" && (dictionary_mode $rule "partial") == "full"
+              if (dictionary_mode $rule "partial") == "full"
                 $trader_kind = $value
                 break
               end
