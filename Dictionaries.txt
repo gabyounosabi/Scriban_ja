@@ -27,7 +27,7 @@
   # 対象1件は作業本文・特性・欲求・Hediffラベル・天候名・イベント名など。プロンプト全体ではない。
   # modeで検索条件は変わらない。完全一致の派閥名・天候名・場所名は両modeで同じ結果になる。
   # 非空fullを採用したら同じ辞書の後続ルールは適用しない。別辞書や後段の補足は従来どおり続く。
-  # value="" はmodeによらず各辞書の従来動作を維持する（削除・原文維持・非表示等）。
+  # value="" は、partialなら一致箇所の除去、fullなら対象1件全体の非表示になる（派閥・UN・天候・イベント・欲求等で原文維持が基本の辞書を除く）。
   # mode省略・null・不正値は従来の置換範囲に戻る。旧設定をそのまま利用できる。
   # 当選時は指定の置換を必ず行い、落選時は対象の表示・採用を見送る。対象範囲とvalue=""の意味は各辞書を参照。
   # 旧書式（文字列だけ／確率だけ）も読み込めるが、新しく追加する項目は上の書式に統一する。
@@ -68,8 +68,8 @@
   # 影響箇所：冒頭の性別表示、【健康情報】、【装備】の武器名、【欲求】。
   # chanceは一致した項目の表示確率。当選時は必ず置換し、落選時はその項目全体を非表示にする。
   # 非表示の単位は性別・武器名・欲求1件・Hediff1件。未登録の項目はそのまま残す。
-  # 性別表示・【装備】・【欲求】ではmodeに従って置換し、valueが空なら一致部分だけを除去する。
-  # 【健康情報】ではvalueが空ならchanceにかかわらずHediff項目全体を除外する。出血要約は辞書の対象外。
+  # すべての対象（性別表示・【装備】・【欲求】・【健康情報】）でmodeに従って置換する。
+  # partialでvalueが空なら一致部分だけを除去し、fullでvalueが空なら項目全体（Hediff1件など）を除外する。
   # 一致するルールを登録順に適用する。partialでは後続ルールも適用し、非空fullの採用で終了する。
   # 置換後の各欄は、ペルソナの{"キーワード"}条件を判定する文脈にも使われる。
   replace_dict = {
@@ -82,23 +82,23 @@
     "[Weapon]": { value: "武器：", chance: 100, mode: "partial" },
     "[Apparel]": { value: "衣服：", chance: 100, mode: "partial" },
     # ここから下は自由
-    "不死": { value: "", chance: 100, mode: "partial" },
-    "不老": { value: "", chance: 100, mode: "partial" },
-    "膨張": { value: "", chance: 100, mode: "partial" },
-    "メカリンク": { value: "", chance: 100, mode: "partial" },
-    "豪華な宿舎": { value: "", chance: 100, mode: "partial" },
-    "侵蝕された眼": { value: "", chance: 100, mode: "partial" },
-    "制御不能な触手": { value: "", chance: 100, mode: "partial" },
-    "再生 (": { value: "", chance: 100, mode: "partial" },
-    "復活": { value: "", chance: 100, mode: "partial" },
-    "取り外された": { value: "", chance: 100, mode: "partial" }, # 義肢移植などで並ぶ「取り外された」の部位項目を非表示にする。
-    "心が壊される": { value: "", chance: 100, mode: "partial" },
-    "耐性": { value: "", chance: 100, mode: "partial" }, # たばこ耐性等を非表示にしノイズを減らす
+    "不死": { value: "", chance: 100, mode: "full" },
+    "不老": { value: "", chance: 100, mode: "full" },
+    "膨張": { value: "", chance: 100, mode: "full" },
+    "メカリンク": { value: "", chance: 100, mode: "full" },
+    "豪華な宿舎": { value: "", chance: 100, mode: "full" },
+    "侵蝕された眼": { value: "", chance: 100, mode: "full" },
+    "制御不能な触手": { value: "", chance: 100, mode: "full" },
+    "再生 (": { value: "", chance: 100, mode: "full" },
+    "復活": { value: "", chance: 100, mode: "full" },
+    "取り外された": { value: "", chance: 100, mode: "full" }, # 義肢移植などで並ぶ「取り外された」の部位項目を非表示にする。
+    "心が壊される": { value: "", chance: 100, mode: "full" },
+    "耐性": { value: "", chance: 100, mode: "full" }, # たばこ耐性等を非表示にしノイズを減らす
     "興奮状態": { value: "興奮状態", chance: 10, mode: "partial" }, #健康情報で確率表示にする際はこれ
     "高揚状態": { value: "高揚状態", chance: 10, mode: "partial" },
-    "健康の教え": { value: "", chance: 100, mode: "partial" },
-    "グルメ料理": { value: "", chance: 100, mode: "partial" },
-    "ホットソースを食事で摂取": { value: "トウガラシが効いた美味しい料理を食べた", chance: 30, mode: "partial" },
+    "健康の教え": { value: "", chance: 100, mode: "full" },
+    "グルメ料理": { value: "", chance: 100, mode: "full" },
+    "食事で摂取": { value: "", chance: 100, mode: "full" },
     "滋養強壮": { value: "MTL-M-02ゼリーを飲み、治癒能力が上がっている", chance: 50, mode: "partial" },
   }
 
