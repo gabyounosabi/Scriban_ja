@@ -9,140 +9,323 @@
   # 対象条件を満たした場合のUN発火率。0で無効、100で必ず発火する
   UN_chance = 50
 
-  # UN発火時のSystem指示文。{name}は対象pawnの名前へ自動的に置換される
-  UN_instruction = "あなたは特殊なロールプレイAIです。{name}の以下のシーンを詳細に描写してください\n"
+  # 相手なし・相手を特定できないUNで使うSystem指示文。{name}は対象pawnの名前へ自動的に置換される
+  UN_instruction = "あなたは特殊なロールプレイAIです。{name}の【現在の場面】を詳細に描写してください\n"
+
+  # 相手を一意に特定できたUNで使う指示文。{name}はUN対象pawnの名前。場面と相手の補足はUserへ表示する。
+  # 同じ条件で、ペルソナの{UNWP}本文{END}も有効になる。
+  UN_instruction_with_partner = "あなたは特殊なロールプレイAIです。{name}と相手の立場・関係性を踏まえ、【現在の場面】を詳細に描写してください\n"
+
+  # UN発火時の発言回数と文字数の指示。Systemの出力形式の後へ表示する。
+  UN_output_rules = "発言は2回まで。textは200文字程度。「」無しの平文"
 
   # ===== 辞書の共通書式 =====
-  # "検索キー": { value: "置換・表示する文字列", chance: 100 }
+  # "検索キー": { value: "置換・表示する文字列", chance: 100, mode: "partial" }
   # 左側の文字列がkey（検索語）、valueが置換・表示する文字列、chanceが表示・採用確率。
   # chanceは0～100。0では必ず落選、100では必ず当選する。
+  # modeは置換範囲："partial" は一致部分、"full" は対象1件の本文全体を置換する。
+  # 対象1件は作業本文・特性・欲求・Hediffラベル・天候名・イベント名など。プロンプト全体ではない。
+  # modeで検索条件は変わらない。完全一致の派閥名・天候名・場所名は両modeで同じ結果になる。
+  # 非空fullを採用したら同じ辞書の後続ルールは適用しない。別辞書や後段の補足は従来どおり続く。
+  # value="" はmodeによらず各辞書の従来動作を維持する（削除・原文維持・非表示等）。
+  # mode省略・null・不正値は従来の置換範囲に戻る。旧設定をそのまま利用できる。
   # 当選時は指定の置換を必ず行い、落選時は対象の表示・採用を見送る。対象範囲とvalue=""の意味は各辞書を参照。
   # 旧書式（文字列だけ／確率だけ）も読み込めるが、新しく追加する項目は上の書式に統一する。
 
   # ===== UNで検出するシーンの辞書 =====
-  # fullinteractionを行順に部分一致検索し、一致がなければ未置換のp.jobも検索する。
-  # valueが空なら一致した原文行を使用し、文章を入れると原文行全体をその文章へ置き換える。
+  # fullinteraction、本人名を含むPlayLogの独自検索、未置換のp.jobの順で検索する。
+  # valueが空なら一致した原文行を使用する。非空fullは行全体、partialは行内のkeyだけを置換する。
+  # 採用した文章はUserの【現在の場面】へ表示する。先頭の【判定語】は表示から外すがペルソナ条件には使う。
   # chanceはそのkeyを採用する確率。UN_chanceの抽選も通る必要がある（50と50なら概ね25%）。
   # 同じkeyの落選は他の行・p.job・別pawnでも再抽選しない。採用可能なkeyのうち行順・登録順を優先する。
   # 辞書を空にするとUNは発火しない。System/Userは同じ辞書を読み込む。
   UN_keyword = {
-    "サッカーボール": { value: "", chance: 100 },
-    "バスケットボール": { value: "", chance: 100 },
+    "サッカーボール": { value: "", chance: 100, mode: "full" },
+    "バスケットボール": { value: "", chance: 100, mode: "full" },
   }
 
   # UN対象の最低生物学的年齢（以上）。20なら20歳以上が対象。
   UN_min_age = 20
+
+  # UN中もSystemへ【直前の会話】を表示するか。trueで表示、falseで非表示。
+  UN_include_history = true
+
+  # 独自検索する交流履歴の件数。本人名を含む新しい履歴から数える。0で標準の5件取得のみ。
+  # 「交流名: 名前」にUNキーワードが含まれる時だけ採用する。元の詳細本文とは異なる。
+  # 名前の文字列照合なので、同名や、別の人物名に本人名が含まれる場合は誤一致し得る。
+  UN_interaction_count = 10
 
   # ===== プロンプトに表示する派閥名の変更 =====
   # keyはゲーム内の派閥名への完全一致、valueはLLMへ見せる名前。
   # chanceは派閥名の表示確率。落選時は名前を省き、当選時はvalueの名前を使う（空なら元の名前）。
   # System/Userで同じ抽選結果を使う。名前の表示有無は所属・敵味方の判定に影響しない。
   faction_display_dict = {
-    "闇の存在": { value: "異形", chance: 100 },
-    "古代人": { value: "古代の機械文明", chance: 100 },
+    "闇の存在": { value: "異形", chance: 100, mode: "full" },
+    "古代人": { value: "古代の機械文明", chance: 100, mode: "full" },
   }
 
   # ===== 除外/置換キーワード（前半部分は消さないでください） =====
   # 影響箇所：冒頭の性別表示、【健康情報】、【装備】の武器名、【欲求】。
   # chanceは一致した項目の表示確率。当選時は必ず置換し、落選時はその項目全体を非表示にする。
   # 非表示の単位は性別・武器名・欲求1件・Hediff1件。未登録の項目はそのまま残す。
-  # 性別表示・【装備】・【欲求】では一致部分をvalueへ置換し、valueが空なら一致部分だけを除去する。
+  # 性別表示・【装備】・【欲求】ではmodeに従って置換し、valueが空なら一致部分だけを除去する。
   # 【健康情報】ではvalueが空ならchanceにかかわらずHediff項目全体を除外する。出血要約は辞書の対象外。
-  # 一致するルールを登録順に適用する。複数に一致した項目は全ての抽選を通った場合だけ表示する。
+  # 一致するルールを登録順に適用する。partialでは後続ルールも適用し、非空fullの採用で終了する。
   # 置換後の各欄は、ペルソナの{"キーワード"}条件を判定する文脈にも使われる。
   replace_dict = {
-    "Male": { value: "男性", chance: 100 },
-    "Female": { value: "女性", chance: 100 },
-    "Traits: ": { value: "", chance: 100 },
-    "Relations: ": { value: "", chance: 100 },
-    "Equipment: ": { value: "", chance: 100 },
-    "Memory: ": { value: "", chance: 100 },
-    "[Weapon]": { value: "武器：", chance: 100 },
-    "[Apparel]": { value: "衣服：", chance: 100 },
+    "Male": { value: "男性", chance: 100, mode: "partial" },
+    "Female": { value: "女性", chance: 100, mode: "partial" },
+    "Traits: ": { value: "", chance: 100, mode: "partial" },
+    "Relations: ": { value: "", chance: 100, mode: "partial" },
+    "Equipment: ": { value: "", chance: 100, mode: "partial" },
+    "Memory: ": { value: "", chance: 100, mode: "partial" },
+    "[Weapon]": { value: "武器：", chance: 100, mode: "partial" },
+    "[Apparel]": { value: "衣服：", chance: 100, mode: "partial" },
     # ここから下は自由
-    "不死": { value: "", chance: 100 },
-    "不老": { value: "", chance: 100 },
-    "メカリンク": { value: "", chance: 100 },
-    "豪華な宿舎": { value: "", chance: 100 },
-    "侵蝕された眼": { value: "", chance: 100 },
-    "制御不能な触手": { value: "", chance: 100 },
-    "再生 (": { value: "", chance: 100 },
-    "復活": { value: "", chance: 100 },
-    "取り外された": { value: "", chance: 100 }, # 義肢移植などで並ぶ「取り外された」の部位項目を非表示にする。
-    "耐性": { value: "", chance: 100 }, # たばこ耐性等を非表示にしノイズを減らす
-    "健康の教え": { value: "", chance: 100 },
-    "グルメ料理": { value: "", chance: 100 },
-    "ホットソースを食事で摂取": { value: "トウガラシが効いた美味しい料理を食べた", chance: 30 },
+    "不死": { value: "", chance: 100, mode: "partial" },
+    "不老": { value: "", chance: 100, mode: "partial" },
+    "膨張": { value: "", chance: 100, mode: "partial" },
+    "メカリンク": { value: "", chance: 100, mode: "partial" },
+    "豪華な宿舎": { value: "", chance: 100, mode: "partial" },
+    "侵蝕された眼": { value: "", chance: 100, mode: "partial" },
+    "制御不能な触手": { value: "", chance: 100, mode: "partial" },
+    "再生 (": { value: "", chance: 100, mode: "partial" },
+    "復活": { value: "", chance: 100, mode: "partial" },
+    "取り外された": { value: "", chance: 100, mode: "partial" }, # 義肢移植などで並ぶ「取り外された」の部位項目を非表示にする。
+    "心が壊される": { value: "", chance: 100, mode: "partial" },
+    "耐性": { value: "", chance: 100, mode: "partial" }, # たばこ耐性等を非表示にしノイズを減らす
+    "興奮状態": { value: "興奮状態", chance: 10, mode: "partial" }, #健康情報で確率表示にする際はこれ
+    "高揚状態": { value: "高揚状態", chance: 10, mode: "partial" },
+    "健康の教え": { value: "", chance: 100, mode: "partial" },
+    "グルメ料理": { value: "", chance: 100, mode: "partial" },
+    "ホットソースを食事で摂取": { value: "トウガラシが効いた美味しい料理を食べた", chance: 30, mode: "partial" },
+    "滋養強壮": { value: "MTL-M-02ゼリーを飲み、治癒能力が上がっている", chance: 50, mode: "partial" },
   }
 
   # ===== 作業内容専用の除去/置換 =====
-  # keyに部分一致した箇所をvalueへ順に置換する。valueが空なら一致部分だけを除去する。
+  # keyは部分一致で検索する。partialは一致箇所を順に置換、非空fullは作業本文を置換して終了する。
+  # valueが空なら一致部分だけを除去する。移動の枠や作業対象の補足はfullでも別に付く。
   # chanceは作業内容の表示確率。落選時は作業本文と作業対象の補足を非表示にする。空のkeyは無視する。
   # 表示の変更で、元のp.jobを使う戦闘・狩猟・UNの判定は変わらない。
+  # traveling to: / (heading there)はUser側で分離し、整形後に「次の作業の為移動中：「…」」と表示する。
   job_replace_dict = {
-    "traveling to: ": { value: "", chance: 100 },
-    "Traveling to: ": { value: "", chance: 100 },
-    "traveling to": { value: "", chance: 100 },
-    "Traveling to": { value: "", chance: 100 },
     # ここから下は自由
-    "木材を精製中": { value: "木材をバイオ液化燃料に精製中", chance: 100 },
-    "有機物を精製中": { value: "有機物をバイオ液化燃料に精製中", chance: 100 },
-    "グルメスープ": { value: "肉野菜ベースの美味しいスープ", chance: 100 },
-    "PON": { value: "", chance: 100 },
+    "木材を精製中": { value: "木材をバイオ液化燃料に精製中", chance: 100, mode: "partial" },
+    "有機物を精製中": { value: "有機物をバイオ液化燃料に精製中", chance: 100, mode: "partial" },
+    "グラヴシップの発射に参列する": { value: "グラヴシップの発射準備中", chance: 100, mode: "partial" },
+    "ぼんやりしている": { value: "", chance: 100, mode: "partial" },
+    "グルメスープ": { value: "待機中", chance: 100, mode: "partial" },
+    "PON": { value: "", chance: 100, mode: "partial" },
   }
 
   # ===== 作業対象・攻撃元・襲撃対象の補助情報 =====
-  # 作業内容ではkeyへの一致部分をvalueへ置換する。valueが空なら一致部分を除去する。
+  # 作業内容・敵構成の種別ラベルはmodeに従って置換する。valueが空なら一致部分を除去する。
   # 健康情報では、表示対象Hediffの置換前ラベルにkeyがあればvalueをkeyごとに一度だけ補足する。
+  # 健康の攻撃元補足は両modeともvalueを補足する。Hediff本文全体を置き換える用途ではない。
   # 健康情報のvalueが空の場合や、除外済みHediffには補足しない。
   # chanceはそれぞれの表示確率。作業側で落選したら作業本文と対象の補足を非表示にする。
   # 健康側の落選は攻撃元の補足だけを非表示にし、怪我そのものは残す（怪我の表示はreplace_dictで設定）。
-  # 襲撃の敵構成では種別名の一致部分を置換する。落選時は種別名だけを省き、大分類と警告は残す。
+  # 襲撃の敵構成では落選時に種別名だけを省き、大分類と警告は残す。
+  # 説明は短く保ち、味方としても存在する種族・機体を常に敵だとは断定しない。
+  # 同名の生物を区別できない「イグアナ」、他の名前に混ざる「サイ」「トラ」等は登録しない。
+  # 複合名は長いkeyを先に登録する。先に一致した部分と挿入済みの説明には、短いkeyを重ねない。
+  # fullも未置換の部分にkeyがある場合だけ採用する。採用したfullは対象本文全体を置換する。
   pawn_description_dict = {
-    "パイクマン": { value: "パイクマン：ニードルガンを装備した長距離戦闘用メカノイド", chance: 100 },
-    "セントリードローン": { value: "セントリードローン：スキャッターガンを装備した旧式の敵性メカ", chance: 100 },
-    "ハイブクイーン": { value: "ハイブクイーン：巨大な体格を持つ虫の女王", chance: 100 },
+    # バニラの戦闘メカノイド（Royalty・Ideologyの襲撃等にも出現）
+    "パイクマン": { value: "パイクマン：ニードルガンを装備した長距離戦闘用メカノイド", chance: 100, mode: "partial" },
+    "ランサー": { value: "ランサー：高精度のチャージランスで射撃する軽装甲メカノイド", chance: 100, mode: "partial" },
+    "機械化カマキリ": { value: "機械化カマキリ：両腕の刃で接近戦を行う高速メカノイド", chance: 100, mode: "partial" },
+    "機械化シロアリ": { value: "機械化シロアリ：建物や防壁の破壊に特化した突破用メカノイド", chance: 100, mode: "partial" },
+    "ガンナー型機械化ムカデ": { value: "ガンナー型機械化ムカデ：重装甲の多脚機体で連射火器による制圧を行う", chance: 100, mode: "partial" },
+    "ブラスター型機械化ムカデ": { value: "ブラスター型機械化ムカデ：重装甲の多脚機体で強力なチャージ火器を運用する", chance: 100, mode: "partial" },
+    "バーナー型機械化ムカデ": { value: "バーナー型機械化ムカデ：重装甲の多脚機体で焼夷攻撃を行う", chance: 100, mode: "partial" },
+
+    # 巨大昆虫
+    "メガスカラベ": { value: "メガスカラベ：硬い外殻と大あごを持つ小型の巨大昆虫", chance: 100, mode: "partial" },
+    "スピロピード": { value: "スピロピード：掘削用の爪で近接攻撃を行う中型の巨大昆虫", chance: 100, mode: "partial" },
+    "メガスパイダー": { value: "メガスパイダー：厚い甲殻と長い刃状の前脚を持つ大型の巨大昆虫", chance: 100, mode: "partial" },
+
+    # Biotechの戦闘・支援メカノイド
+    "ミリター": { value: "ミリター：小型ショットガンを装備した量産型の戦闘メカノイド", chance: 100, mode: "partial" },
+    "リジョナリー": { value: "リジョナリー：対弾シールドと中距離火器で部隊を支えるメカノイド", chance: 100, mode: "partial" },
+    "スコーチャー": { value: "スコーチャー：短射程の火炎放射で周囲を焼くメカノイド", chance: 100, mode: "partial" },
+    "テッセロン": { value: "テッセロン：中距離からビームを掃射し対象を発火させるメカノイド", chance: 100, mode: "partial" },
+    "トンネラー": { value: "トンネラー：重装甲と巨大なパワークローを持つ採掘用メカノイド", chance: 100, mode: "partial" },
+    "ウォーアーチン": { value: "ウォーアーチン：短射程の射撃を行う小型の消耗型戦闘メカノイド", chance: 100, mode: "partial" },
+    "センチュリオン": { value: "センチュリオン：大型シールドと搭載タレットで部隊を守る超大型メカノイド", chance: 100, mode: "partial" },
+    "ディアボロス": { value: "ディアボロス：長い充填後に強力な熱線を放つ攻城用の超大型メカノイド", chance: 100, mode: "partial" },
+    "ウォークイーン": { value: "ウォークイーン：体内で小型の戦闘機械を製造し戦場へ展開する超大型メカノイド", chance: 100, mode: "partial" },
+    "アポクリトン": { value: "アポクリトン：機能停止した機械兵を再起動する跳躍可能な指揮メカノイド", chance: 100, mode: "partial" },
+
+    # Odysseyの古代ドローン・虫・戦闘メカノイド
+    "セントリードローン": { value: "セントリードローン：スキャッターガンを装備した旧式の敵性メカ", chance: 100, mode: "partial" },
+    "ハンタードローン": { value: "ハンタードローン：標的を追跡して接近すると自爆する古代ドローン", chance: 100, mode: "partial" },
+    "ワスプ": { value: "ワスプ：麻痺性の毒素を注入して生物を無力化する小型ドローン", chance: 100, mode: "partial" },
+    "サイクロプス": { value: "サイクロプス：標的を捕捉するとシールド破壊ビームを連射するメカノイド", chance: 100, mode: "partial" },
+    "ハイブクイーン": { value: "ハイブクイーン：巨大な体格を持つ虫の女王", chance: 100, mode: "partial" },
+    "幼虫": { value: "幼虫：巨大昆虫の幼生で酸性の分泌物を吐いて身を守る", chance: 100, mode: "partial" },
+    "バッタ": { value: "バッタ：短距離を跳び飛ぶ巨大昆虫で群れになると危険", chance: 100, mode: "partial" },
+
+    # Vanilla Gravship Expanded - Chapter 1（3609835606）
+    # 「ハンター」は上の「ハンタードローン」より後に登録し、別の機体として扱う。
+    "アストロピード": { value: "アストロピード：浮遊する重装甲の宇宙戦用メカで爆発性の弾幕を放つ", chance: 100, mode: "partial" },
+    "ハンター": { value: "ハンター：浮遊して接近し短射程の連装ミサイルを撃つ宇宙戦用メカ", chance: 100, mode: "partial" },
+
+    # Vanilla Gravship Expanded - Chapter 2（3799737423）。結節は通常個体より先に登録する。
+    "移動エクソハイヴ": { value: "移動エクソハイヴ：多数の宇宙虫に動かされ脅威を受けると反撃する巨大な移動巣", chance: 100, mode: "partial" },
+    "エクソリーチ": { value: "エクソリーチ：真空に適応した厚い甲殻の宇宙虫で鋭い口による近接戦を行う", chance: 100, mode: "partial" },
+    "エクソピード": { value: "エクソピード：真空に適応した重装甲の宇宙虫で強力な付属肢により巣を守る", chance: 100, mode: "partial" },
+    "エクソワームの結節": { value: "エクソワームの結節：寄生性の噛み付きと個体の分離攻撃を行う宇宙虫の巨大群体", chance: 100, mode: "partial" },
+    "エクソワーム": { value: "エクソワーム：真空に適応した再生力の高い大型のワーム状宇宙虫", chance: 100, mode: "partial" },
+    "ヌリピード": { value: "ヌリピード：極めて高い再生力を持つ巨大な宇宙虫で火にさらされると再生が止まる", chance: 100, mode: "partial" },
+
+    # Anomalyの異常存在。捕獲・味方化された個体もいるため状態を決め付けない。
+    "サイトスティーラー": { value: "サイトスティーラー：姿を隠して接近し鋭い爪で襲う痩せた人型の異常存在", chance: 100, mode: "partial" },
+    "デバウアー": { value: "デバウアー：跳躍して獲物を丸呑みにし体内で消化する大型の異常存在", chance: 100, mode: "partial" },
+    "ゴアハルク": { value: "ゴアハルク：棘を投射する膨れた巨体の異常存在で近接攻撃にも頑丈", chance: 100, mode: "partial" },
+    "メタルホラー": { value: "メタルホラー：宿主に潜伏し他者へ感染する金属質の寄生性異常存在", chance: 100, mode: "partial" },
+    "レヴナント": { value: "レヴナント：透明化して人を襲い催眠状態に陥れる長身の異常存在", chance: 100, mode: "partial" },
+    "ノクトル": { value: "ノクトル：暗闇で活発に襲うが光に弱い黒い甲殻の異常存在", chance: 100, mode: "partial" },
+    "ノチオスフィア": { value: "ノチオスフィア：球状の機械的な異常存在で跳躍や強力な攻撃能力を持つ", chance: 100, mode: "partial" },
+    "キメラ": { value: "キメラ：複数の動物が融合したような巨体を持つ凶暴な異常存在", chance: 100, mode: "partial" },
+    "シャンブラー": { value: "シャンブラー：異常な技術で動き出した死体で痛みを感じず生物を襲う", chance: 100, mode: "partial" },
+    "グール": { value: "グール：異常な力で変異し再生能力と高い近接戦闘力を得た元人間", chance: 100, mode: "partial" },
+    "フィンガースパイク": { value: "フィンガースパイク：一本の棘を持ち素早く動く犬ほどの大きさの肉の生物", chance: 100, mode: "partial" },
+    "タフスパイク": { value: "タフスパイク：硬い甲殻を持ち遠距離へ棘を投射する人間大の肉の生物", chance: 100, mode: "partial" },
+    "トライスパイク": { value: "トライスパイク：複数の小型個体が融合した肉の生物で死亡時に分裂することがある", chance: 100, mode: "partial" },
+    "バルブフリーク": { value: "バルブフリーク：大きな爪を持つ肉の融合体で死亡時に小型個体へ分裂する", chance: 100, mode: "partial" },
+    "ドレッドメルド": { value: "ドレッドメルド：巨大な爪で岩を掘り肉に覆われた巣穴に潜む肉の融合体", chance: 100, mode: "partial" },
+
+    # Ideologyの戦闘向けドライアド
+    "バークスキンドライアド": { value: "バークスキンドライアド：樹皮のような厚い皮で攻撃を受け止める共生生物", chance: 100, mode: "partial" },
+    "クロウラードライアド": { value: "クロウラードライアド：巨大な爪による近接攻撃に特化した共生生物", chance: 100, mode: "partial" },
+
+    # バニラ・DLCの危険な野生動物。通常は敵対しない種もいる。
+    "グリズリー": { value: "グリズリー：強い腕力と鋭い爪を持つ大型の雑食性のクマ", chance: 100, mode: "partial" },
+    "ホッキョクグマ": { value: "ホッキョクグマ：寒冷地の大型肉食獣で強い牙と爪を持つ", chance: 100, mode: "partial" },
+    "クーガー": { value: "クーガー：素早く接近し牙と爪で獲物を仕留める大型のネコ科捕食者", chance: 100, mode: "partial" },
+    "ヤマネコ": { value: "ヤマネコ：小柄だが牙と爪で獲物を狩るネコ科の捕食者", chance: 100, mode: "partial" },
+    "パンサー": { value: "パンサー：素早い動きと強い爪を持つ大型のネコ科捕食者", chance: 100, mode: "partial" },
+    "ワーグ": { value: "ワーグ：鋭い牙と爪を持つ大型で獰猛な肉食獣", chance: 100, mode: "partial" },
+    "シンリンオオカミ": { value: "シンリンオオカミ：群れで狩りを行い牙で獲物を襲う肉食獣", chance: 100, mode: "partial" },
+    "ホッキョクオオカミ": { value: "ホッキョクオオカミ：寒冷地に適応し牙で獲物を襲う肉食獣", chance: 100, mode: "partial" },
+    "コブラ": { value: "コブラ：噛み付くと毒を注入する大型の肉食ヘビ", chance: 100, mode: "partial" },
+    "スランボ": { value: "スランボ：厚い皮と鋭い角を持つ巨大な生物で怒ると非常に危険", chance: 100, mode: "partial" },
+    "メガスロス": { value: "メガスロス：厚い皮と大きな爪を持つ巨大な草食獣", chance: 100, mode: "partial" },
+    "ゾウ": { value: "ゾウ：大きな体と長い牙を持つ力の強い動物", chance: 100, mode: "partial" },
+    "バイソン": { value: "バイソン：力の強い大型草食獣で刺激されると危険", chance: 100, mode: "partial" },
+    "ボマロープ": { value: "ボマロープ：背中に可燃性の液嚢を持ち死亡時に爆発する草食獣", chance: 100, mode: "partial" },
+    "ボムネズミ": { value: "ボムネズミ：死亡時に強い爆発を起こす小型の動物", chance: 100, mode: "partial" },
+    "トキサロープ": { value: "トキサロープ：背中に毒物の袋を持ち死亡時に有毒ガスを放出する動物", chance: 100, mode: "partial" },
+    "コウヤネズミ": { value: "コウヤネズミ：汚染に強く噛み付いた相手に毒物を蓄積させる大型のネズミ", chance: 100, mode: "partial" },
+    "アリゲーター": { value: "アリゲーター：強力な顎を持ち水辺に生息する大型の爬虫類", chance: 100, mode: "partial" },
+    "グレートウルフ": { value: "グレートウルフ：遺伝子工学で生み出された大型で危険なオオカミ", chance: 100, mode: "partial" },
+    "オオトカゲ": { value: "オオトカゲ：毒腺を持ち獲物を毒で弱らせる大型の爬虫類", chance: 100, mode: "partial" },
+    "クズリ": { value: "クズリ：小柄ながら力が強く大きな相手にも挑む獰猛な捕食者", chance: 100, mode: "partial" },
+    "ゴリラ": { value: "ゴリラ：普段は温厚だが怒ると強い腕力で襲う大型の類人猿", chance: 100, mode: "partial" },
+
+    # The Dead Man's Switch（3121742525、1.6の本体定義と同梱日本語訳を参照）
+    # スナイパー等の一般語や、動物と同名の機体は誤置換を避けるため登録しない。
+    "ソルダート": { value: "ソルダート：人間用の火器を扱う人型の機械兵で背負う電源が弱点", chance: 100, mode: "partial" },
+    "グレナディア": { value: "グレナディア：軽火器と擲弾発射器を運用する人型の機械兵", chance: 100, mode: "partial" },
+    "カノニエ": { value: "カノニエ：ロケット発射器や無反動砲を運用する人型の機械兵", chance: 100, mode: "partial" },
+    "サージェント": { value: "サージェント：円盤状レーダーで指揮通信を中継する軽武装の機械兵", chance: 100, mode: "partial" },
+    "アーキバシア": { value: "アーキバシア：幅広い射程で精密射撃を行う標準的な人型の機械兵", chance: 100, mode: "partial" },
+    "イェーガー": { value: "イェーガー：高い機動力と光学迷彩を用いて浸透や奇襲を行う機械兵", chance: 100, mode: "partial" },
+    "パイオニア": { value: "パイオニア：強化された視覚センサーを持つ前線偵察型の機械兵", chance: 100, mode: "partial" },
+    "ローニン": { value: "ローニン：突撃装甲と高い機動力を備え市街地戦に向いた人型の機械兵", chance: 100, mode: "partial" },
+    "グラデュエーター": { value: "グラデュエーター：盾と強化された格闘機能を持つ近接戦闘用の機械兵", chance: 100, mode: "partial" },
+    "グラデュエイター": { value: "グラデュエイター：盾と強化された格闘機能を持つ近接戦闘用の機械兵", chance: 100, mode: "partial" },
+    "シージブレイカー": { value: "シージブレイカー：強固な装甲で防壁の突破や陣地攻撃を担う機械兵", chance: 100, mode: "partial" },
+    "プロテクター": { value: "プロテクター：厚い装甲と大型の閃光シールドを備える制圧用の機械兵", chance: 100, mode: "partial" },
+    "ファランクス": { value: "ファランクス：突撃装甲と高い機動力を備える量産型の市街地戦用機械兵", chance: 100, mode: "partial" },
+    "バトルフレンド": { value: "バトルフレンド：人間用装備を広く扱える運搬能力も高い人型の機械兵", chance: 100, mode: "partial" },
+    "フィールドコマンド": { value: "フィールドコマンド：指揮通信を中継する軽武装の人型機械兵", chance: 100, mode: "partial" },
+    "エスコートリフター": { value: "エスコートリフター：旧式の量産機を運搬向けに改造した人型機体", chance: 100, mode: "partial" },
+    "シャフトワーカー": { value: "シャフトワーカー：旧式の量産機を採掘や建築向けに改造した人型機体", chance: 100, mode: "partial" },
+    "タイニーマンモス": { value: "タイニーマンモス：物資輸送と自衛用の武装を備えた無人の履帯式輸送機", chance: 100, mode: "partial" },
+    "ジオケロン": { value: "ジオケロン：履帯で移動しパルスシールドで部隊を支える重支援機", chance: 100, mode: "partial" },
+    "カレッタ": { value: "カレッタ：速射式の迫撃砲で遠方を砲撃する移動砲兵機体", chance: 100, mode: "partial" },
+    "キルドーザー": { value: "キルドーザー：強化装甲とドーザーブレードを備え前線を突破する工兵機体", chance: 100, mode: "partial" },
+    "ゲッコー": { value: "ゲッコー：追加の電磁装甲で爆発物への防御を強化した市街地戦用の歩行戦車", chance: 100, mode: "partial" },
+    "エイプ": { value: "エイプ：重火器の運用を想定した大型人型オートマトロイドの試作機", chance: 100, mode: "partial" },
+    "タルボサウルス": { value: "タルボサウルス：重装甲と大型火器を備えた超重量級の二足歩行戦車", chance: 100, mode: "partial" },
+    "ファルコン": { value: "ファルコン：偵察部隊や対戦車部隊を支援する重三発ローター式ドローン", chance: 100, mode: "partial" },
+    "ノクトゥラ": { value: "ノクトゥラ：隠密作戦で指揮通信を中継する飛行ドローン", chance: 100, mode: "partial" },
+    "ハイラックス": { value: "ハイラックス：小型の履帯式車体で火器を運ぶ自動戦闘機体", chance: 100, mode: "partial" },
+    "バーリングバード": { value: "バーリングバード：小火器や擲弾で武装可能な高速の偵察用四発ロータードローン", chance: 100, mode: "partial" },
+    "ハウンド": { value: "ハウンド：小型火器を扱える非人型の展開式戦闘ロボット", chance: 100, mode: "partial" },
+    "ドギー": { value: "ドギー：小型火器や火炎放射器で武装する四足歩行の偵察支援ロボット", chance: 100, mode: "partial" },
+    "レディ": { value: "レディ：人間に近い構造を持つ合成機械技術製の人型メカノイド", chance: 100, mode: "partial" },
+    "ハーミットクラブ": { value: "ハーミットクラブ：精密工作機械や手術用工具を内蔵した大型の移動産業機体", chance: 100, mode: "partial" },
+
+    # 導入済みVanilla Animals Expanded（2871933948）の捕食者
+    "チーター": { value: "チーター：高速で獲物へ接近し牙と爪で狩るネコ科の捕食者", chance: 100, mode: "partial" },
   }
 
   # ===== 表示する特性 =====
-  # keyへの部分一致で最初に一致したルールを使い、chanceの確率でvalueを表示する。
+  # keyへの部分一致で最初のルールを使う。fullは特性1件、partialは特性内のkeyだけを置換する。
   # 未登録・落選・valueが空なら特性を非表示にする。空のkeyは無視する。
   trait_display_dict = {
-    "勤労者": { value: "働き者", chance: 100 },
+    "勤労者": { value: "働き者", chance: 100, mode: "full" },
   }
 
   # ===== 欲求の表示確率 =====
   # keyは部分一致。最初に一致したルールのchanceで表示し、未登録・落選は非表示にする。
-  # valueが空なら元の欲求を表示し、空でなければkeyに一致した部分をvalueへ置換する。
+  # valueが空なら元の欲求を表示する。非空fullは欲求1件、partialはkeyの一致部分を置換する。
   thought_display_dict = {
-    "ライバル": { value: "", chance: 0 }, #ライバル関係はノイズなので飛ばす
-    "親友": { value: "", chance: 0 }, #親友関係は血縁と重複しがちなので飛ばす
-    "死んだ": { value: "", chance: 10 }, #◯◯が死んだ系を10%で拾う
+    "ライバル": { value: "", chance: 0, mode: "partial" }, #ライバル関係はノイズなので飛ばす
+    "親友": { value: "", chance: 0, mode: "partial" }, #親友関係は血縁と重複しがちなので飛ばす
+    "死んだ": { value: "", chance: 10, mode: "partial" }, #◯◯が死んだ系を10%で拾う
   }
 
   # ===== 日常的な天候の表示確率 =====
   # keyに完全一致した天候をchanceの確率で表示する。落選は非表示、未登録は常時表示。
   # valueが空なら元の天候名を使い、空でなければその表示名へ置換する。
-  # 軌道上の温度除外は置換・非表示にする前の天候で判定する。
+  # 宇宙の温度除外は、置換前の天候とマップの真空・宇宙レイヤー等の実情報で判定する。
   weather_display_chance_dict = {
-    "快晴": { value: "", chance: 10 },
-    "霧": { value: "", chance: 10 },
-    "雨": { value: "", chance: 10 },
-    "霧雨": { value: "", chance: 10 },
-    "小雪": { value: "", chance: 10 },
+    "快晴": { value: "", chance: 10, mode: "full" },
+    "霧": { value: "", chance: 10, mode: "full" },
+    "雨": { value: "", chance: 10, mode: "full" },
+    "霧雨": { value: "", chance: 10, mode: "full" },
+    "小雪": { value: "", chance: 10, mode: "full" },
+  }
+
+  # ===== 探索向けに扱う特殊マップと、その場所名 =====
+  # keyはマップの生成定義名に完全一致。天候だけでは地下の種類を判別できないため、この名前で分類する。
+  # 登録したマップではSystemを探索向けにし、UN特殊シーンを抑止する。探索扱いを外す時は項目自体を削除する。
+  # valueは「場所：」に表示する全文。表示時は室内外の区分・部屋名・通常の天候を省く。
+  # 空文字・chance 0・落選は個別の場所名だけを省き、探索向けの指示は維持する。軌道上なら「宇宙」に戻る。
+  # 場所名の抽選は全参加者で一度だけ。
+  # Space / SpacePocketで分かるのは宇宙という区分まで。具体的な施設の種類は推測しない。
+  map_location_display_dict = {
+    "Undercave": { value: "ピットゲート内部（地下にある異形の巣窟）", chance: 100, mode: "full" },
+    "AncientStockpile": { value: "古代高度文明の地下貯蔵庫", chance: 100, mode: "full" },
+    "InsectLair": { value: "地底（虫の巣穴）", chance: 100, mode: "full" },
+    "Labyrinth": { value: "異空間の迷宮", chance: 100, mode: "full" },
+    "MetalHell": { value: "メタルヘル", chance: 100, mode: "full" },
+    "Asteroid": { value: "宇宙（小惑星）", chance: 100, mode: "full" },
+    "AsteroidBasic": { value: "宇宙（小惑星）", chance: 100, mode: "full" },
+    "OrbitalItemStash": { value: "宇宙（アイテム保管庫）", chance: 100, mode: "full" },
+    "SettlementPlatform": { value: "宇宙（入植用プラットフォーム）", chance: 100, mode: "full" },
+    "OrbitalRelay": { value: "宇宙（軌道リレー）", chance: 100, mode: "full" },
+    "Mechhive": { value: "宇宙（メカハイブ）", chance: 100, mode: "full" },
+    "Space": { value: "宇宙", chance: 100, mode: "full" },
+    "SpacePocket": { value: "宇宙", chance: 100, mode: "full" },
   }
 
   # ===== マップイベントの表示確率 =====
   # keyは完全な表示名、またはGameCondition本体の名前。完全な表示名への一致を優先する。
   # chanceは表示確率。落選は非表示、未登録は常時表示。valueが空なら元の表示名を使う。
-  # valueが空でなければ一致箇所を置換し、本体名で一致した場合は性別・強度の接尾情報を残す。
+  # 非空partialは一致箇所を置換し、性別・強度の接尾情報を残す。fullは接尾情報も含めて置換する。
   # 対象性別は置換前の表示名で判定するため、valueで名前を変えても対象者は変わらない。
   map_event_display_chance_dict = {
-    "オーロラ": { value: "", chance: 100 },
-    "サイコスード": { value: "", chance: 50 },
-    "サイコドローン": { value: "", chance: 50 },
-    "火山の冬": { value: "遠くで発生した火山灰によって太陽光が遮られ、気温が下がっています", chance: 30 },
-    "えら腐敗菌": { value: "えら腐敗菌という寄生菌によってこの地域の魚の数が減少しています", chance: 10 },
+    "オーロラ": { value: "", chance: 100, mode: "partial" },
+    "サイコスード": { value: "サイコスード（人々をリラックスさせる波長）", chance: 50, mode: "partial" },
+    "サイコドローン": { value: "サイコドローン（人々を不安にさせる波長）", chance: 50, mode: "partial" },
+    "ウェザーコントローラ": { value: "敵対組織が設置したウェザーコントローラにより天候が変えられています", chance: 50, mode: "partial" },
+    "火山の冬": { value: "遠くで発生した火山灰によって太陽光が遮られ、気温が下がっています", chance: 30, mode: "partial" },
+    "えら腐敗菌": { value: "えら腐敗菌という寄生菌によってこの地域の魚の数が減少しています", chance: 10, mode: "partial" },
   }
 
   # ===== 温度のしきい値と表示確率 =====
@@ -158,15 +341,19 @@
   outdoor_temperature_chance = 100
 
   # ===== トレーダー種別名の変更 =====
-  # chanceは種別情報の表示確率。当選時は必ず一致部分をvalueへ置換し、空なら一致部分を除去する。
+  # chanceは種別情報の表示確率。当選時はmodeに従って置換し、空なら一致部分を除去する。
   # 落選時は該当種別の滞在情報を非表示にする。同じ種別名は一度だけ抽選する。長いkeyを先に置く。
   trader_kind_replace_dict = {
-    "呪い商": { value: "部族の闇行商", chance: 100 },
+    "呪い商": { value: "部族の闇行商", chance: 100, mode: "partial" },
   }
 
   # ===== 現在地のバイオームをSystemへ表示する確率 =====
   # 0で非表示、100で常時表示。MODで追加されたバイオームにも同じ確率を適用する
   biome_display_chance = 10
+
+  # ===== 安全になった後の直近の交戦記録をSystemへ表示する確率 =====
+  # 直近1日以内の記録がある時、会話ごとに一度抽選する。0で非表示、100で常時表示。
+  recent_combat_history_chance = 25
 
   # 喧嘩終了後、このtick数以内だけ会話の口調へ怒りや気まずさを反映する。
   # 怪我の由来表示はUser側で別管理。表示対象の健康情報と、40時間以内の喧嘩メモリがある間だけ表示する。
@@ -179,7 +366,11 @@
     UN_gender: UN_gender,
     UN_chance: UN_chance,
     UN_instruction: UN_instruction,
+    UN_instruction_with_partner: UN_instruction_with_partner,
+    UN_output_rules: UN_output_rules,
     UN_min_age: UN_min_age,
+    UN_include_history: UN_include_history,
+    UN_interaction_count: UN_interaction_count,
     UN_keyword: UN_keyword,
     faction_display_dict: faction_display_dict,
     replace_dict: replace_dict,
@@ -188,6 +379,7 @@
     trait_display_dict: trait_display_dict,
     thought_display_dict: thought_display_dict,
     weather_display_chance_dict: weather_display_chance_dict,
+    map_location_display_dict: map_location_display_dict,
     map_event_display_chance_dict: map_event_display_chance_dict,
     indoor_temperature_max: indoor_temperature_max,
     indoor_temperature_min: indoor_temperature_min,
@@ -197,6 +389,7 @@
     outdoor_temperature_chance: outdoor_temperature_chance,
     trader_kind_replace_dict: trader_kind_replace_dict,
     biome_display_chance: biome_display_chance,
+    recent_combat_history_chance: recent_combat_history_chance,
     social_fight_aftermath_ticks: social_fight_aftermath_ticks,
   }
   # @は関数を実行せず存在を確認する書き方。setvar非対応の環境では保存をスキップする。
