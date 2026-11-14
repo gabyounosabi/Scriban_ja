@@ -1720,7 +1720,7 @@
             ret ""
           end
           $replacement = dictionary_value $rule
-          if $replacement != "" && (dictionary_mode $rule "partial") == "full"
+          if (dictionary_mode $rule "partial") == "full"
             ret $replacement
           end
           $matched = true
@@ -1757,7 +1757,7 @@
         $rule = $dict[$key]
         if dictionary_rule_passes $rule null
           $value = dictionary_value $rule
-          if $value != "" && (dictionary_mode $rule "partial") == "full"
+          if (dictionary_mode $rule "partial") == "full"
             $result = $value
             break
           end
@@ -1771,7 +1771,8 @@
   end
 
   # ===== 健康情報専用の置換 =====
-  # chanceは表示確率。落選またはvalueが空ならHediff全体を除外し、非空の当選valueはmodeに従って置換。
+  # chanceは表示確率。落選時はHediff全体を除外し、当選時はmodeに従って置換する。
+  # partialでvalueが空なら一致部分だけを除去し、fullでvalueが空ならHediff全体を除外する。
   # 空のkeyは全項目一致や置換例外を避けるため無視する。
   func replace_health_label
     $health_text = $0
@@ -1785,10 +1786,10 @@
     for $health_key in ($health_dict | object.keys)
       if $health_key != "" && ($health_result | string.contains $health_key)
         $rule = $health_dict[$health_key]
-        $value = dictionary_value $rule
-        if $value == "" || !(dictionary_rule_passes $rule null)
+        if !(dictionary_rule_passes $rule null)
           ret ""
         end
+        $value = dictionary_value $rule
         if (dictionary_mode $rule "partial") == "full"
           $health_result = $value
           break
