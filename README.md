@@ -7,8 +7,8 @@
 1. RimTalkのプロンプト設定画面で新しいプロンプトプリセットを作成します。その後「有効化」ボタンを押します。
 2. `JSON Format`、`Recent Events`、`Chat History`、`Dialogue Prompt` の4つの設定を**オフ**にします。
 3. エントリ側の緑色の＋ボタンを押し、新たにエントリを追加した後　`Dictionaries.scriban` の全文を貼り付け、最上部へ移動させます。
-4. `Base Instruction` の入力欄を `System.scriban` の全文で上書きし、Role（ロール）を `System` に設定します。
-5. `Context` の入力欄を `User.scriban` の全文で上書きし、Role（ロール）を `User` に設定します。
+4. `Base Instruction` の入力欄を `Base Instruction.txt` の全文で上書きし、Role（ロール）を `System` に設定します。
+5. `Context` の入力欄を `Context.txt` の全文で上書きし、Role（ロール）を `User` に設定します。
 6. その他のRimTalkの設定は、後述の「おすすめ設定」の画像に合わせてください。
 
 > `Chat History` をオフにしていても、過去のAI会話履歴は【直前の会話】としてテンプレート側からAIへ渡されます。履歴の取得件数を1以上に設定すると反映されます。
